@@ -50,7 +50,7 @@ import { selectStreams, selectStreamStartModalLoading } from './selectors'
 import { selectLocale } from '../LanguageProvider/selectors'
 import { selectRoleType } from '../App/selectors'
 
-import { operateLanguageText } from '../../utils/util'
+import { operateLanguageText, transformStringWithDot } from '../../utils/util'
 
 export class Manager extends React.Component {
   constructor (props) {
@@ -71,7 +71,6 @@ export class Manager extends React.Component {
       startModalVisible: false,
       showStreamdetails: null,
       streamStartFormData: [],
-      topicInfoModal: '',
       streamIdGeted: 0,
       actionType: '',
 
@@ -139,7 +138,8 @@ export class Manager extends React.Component {
           instance: s.kafkaInfo.instance,
           connUrl: s.kafkaInfo.connUrl,
           projectName: s.projectName,
-          currentUdf: s.currentUdf
+          currentUdf: s.currentUdf,
+          hideActions: s.hideActions
         })
         responseOriginStream.key = responseOriginStream.id
         responseOriginStream.visible = false
@@ -226,7 +226,6 @@ export class Manager extends React.Component {
         resolve(result)
 
         this.setState({
-          topicInfoModal: result.topicInfo.length === 0 ? 'hide' : '',
           currentUdfVal: result.currentUdf
         })
       })
@@ -270,11 +269,19 @@ export class Manager extends React.Component {
 
         // 显示 Latest offset
         this.props.onLoadLastestOffset(projectIdGeted, record.id, (result) => {
+          let autoRegisteredTopics = result.autoRegisteredTopics.map(v => {
+            v.name = transformStringWithDot(v.name)
+            return v
+          })
+          let userDefinedTopics = result.userDefinedTopics.map(v => {
+            v.name = transformStringWithDot(v.name)
+            return v
+          })
           this.setState({
-            autoRegisteredTopics: result.autoRegisteredTopics,
-            userDefinedTopics: result.userDefinedTopics,
-            streamStartFormData: result.autoRegisteredTopics,
-            tempUserTopics: result.userDefinedTopics.slice()
+            autoRegisteredTopics: autoRegisteredTopics,
+            userDefinedTopics: userDefinedTopics,
+            streamStartFormData: autoRegisteredTopics,
+            tempUserTopics: userDefinedTopics.slice()
             // consumedOffsetValue: result.consumedLatestOffset,
             // kafkaOffsetValue: result.kafkaLatestOffset,
             // kafkaEarliestOffset: result.kafkaEarliestOffset
@@ -297,10 +304,6 @@ export class Manager extends React.Component {
 
     // 单条查询接口获得回显的topic Info，回显选中的UDFs
     this.props.onLoadUdfs(projectIdGeted, record.id, 'user', (result) => {
-      this.setState({
-        topicInfoModal: result.length === 0 ? 'hide' : ''
-      })
-
       // 回显选中的 topic，必须有 id
       const currentUdfTemp = result
       let topicsSelectValue = []
@@ -331,10 +334,18 @@ export class Manager extends React.Component {
     // 显示 Latest offset
     this.props.onLoadLastestOffset(projectIdGeted, record.id, (result) => {
       if (result) {
+        let autoRegisteredTopics = result.autoRegisteredTopics.map(v => {
+          v.name = transformStringWithDot(v.name)
+          return v
+        })
+        let userDefinedTopics = result.userDefinedTopics.map(v => {
+          v.name = transformStringWithDot(v.name)
+          return v
+        })
         this.setState({
-          autoRegisteredTopics: result.autoRegisteredTopics,
-          userDefinedTopics: result.userDefinedTopics,
-          streamStartFormData: result.autoRegisteredTopics
+          autoRegisteredTopics: autoRegisteredTopics,
+          userDefinedTopics: userDefinedTopics,
+          streamStartFormData: autoRegisteredTopics
           // consumedOffsetValue: result.consumedLatestOffset,
           // kafkaOffsetValue: result.kafkaLatestOffset,
           // kafkaEarliestOffset: result.kafkaEarliestOffset
@@ -347,10 +358,19 @@ export class Manager extends React.Component {
     })
   }
 
+  startFlink = (id) => () => {
+    const { projectIdGeted, locale } = this.props
+    this.props.onStartOrRenewStream(projectIdGeted, id, null, 'start', (result) => {
+      let actionTypeMsg = locale === 'en' ? 'Start Successfully!' : '启动成功！'
+      message.success(actionTypeMsg, 3)
+    }, (result) => {
+      let failText = locale === 'en' ? 'Operation failed:' : '操作失败：'
+      message.error(`${failText} ${result}`, 3)
+    })
+  }
   queryLastestoffset = (e) => {
     const { projectIdGeted } = this.props
     const { streamIdGeted, userDefinedTopics, autoRegisteredTopics } = this.state
-    userDefinedTopics
     let topics = {}
     topics.userDefinedTopics = userDefinedTopics.map((v, i) => v.name)
     topics.autoRegisteredTopics = autoRegisteredTopics.map((v, i) => v.name)
@@ -360,10 +380,19 @@ export class Manager extends React.Component {
   // Load Latest Offset
   loadLastestOffsetFunc (projectId, streamId, type, topics) {
     this.props.onLoadLastestOffset(projectId, streamId, (result) => {
+      let autoRegisteredTopics = result.autoRegisteredTopics.map(v => {
+        v.name = transformStringWithDot(v.name)
+        return v
+      })
+      let userDefinedTopics = result.userDefinedTopics.map(v => {
+        v.name = transformStringWithDot(v.name)
+        return v
+      })
       this.setState({
-        autoRegisteredTopics: result.autoRegisteredTopics,
-        userDefinedTopics: result.userDefinedTopics,
-        tempUserTopics: result.userDefinedTopics
+        autoRegisteredTopics: autoRegisteredTopics,
+        userDefinedTopics: userDefinedTopics,
+        tempUserTopics: userDefinedTopics,
+        streamStartFormData: autoRegisteredTopics
         // consumedOffsetValue: result.consumedLatestOffset,
         // kafkaOffsetValue: result.kafkaLatestOffset,
         // kafkaEarliestOffset: result.kafkaEarliestOffset
@@ -403,98 +432,111 @@ export class Manager extends React.Component {
     const { projectIdGeted, locale } = this.props
     const offsetText = locale === 'en' ? 'Offset cannot be empty' : 'Offset 不能为空！'
     this.setState(
-      {unValidate: true}
-    )
-    setTimeout(() => {
-      this.streamStartForm.validateFieldsAndScroll((err, values) => {
-        if (!err || err.newTopicName) {
-          let requestVal = {}
-          switch (actionType) {
-            case 'start':
-              if (!streamStartFormData) {
-                if (!values.udfs) {
-                  requestVal = {}
-                } else {
-                  if (values.udfs.find(i => i === '-1')) {
-                    // 全选
-                    const startUdfValsOrigin = startUdfVals.filter(k => k.id !== -1)
-                    requestVal = { udfInfo: startUdfValsOrigin.map(p => p.id) }
+      {unValidate: true},
+      () => {
+        this.streamStartForm.validateFieldsAndScroll((err, values) => {
+          if (!err || err.newTopicName) {
+            let requestVal = {}
+            switch (actionType) {
+              case 'start':
+                if (!streamStartFormData) {
+                  if (!values.udfs) {
+                    requestVal = {}
                   } else {
-                    requestVal = { udfInfo: values.udfs.map(q => Number(q)) }
-                  }
-                }
-              } else {
-                const mergedData = {}
-                const autoRegisteredData = this.formatTopicInfo(streamStartFormData, 'auto', values, offsetText)
-                const userDefinedData = this.formatTopicInfo(userDefinedTopics, 'user', values, offsetText)
-                mergedData.autoRegisteredTopics = autoRegisteredData
-                mergedData.userDefinedTopics = userDefinedData
-
-                if (!values.udfs) {
-                  requestVal = { topicInfo: mergedData }
-                } else {
-                  if (values.udfs.find(i => i === '-1')) {
-                    // 全选
-                    const startUdfValsOrigin = startUdfVals.filter(k => k.id !== -1)
-                    requestVal = {
-                      udfInfo: startUdfValsOrigin.map(p => p.id),
-                      topicInfo: mergedData
-                    }
-                  } else {
-                    requestVal = {
-                      udfInfo: values.udfs.map(q => Number(q)),
-                      topicInfo: mergedData
+                    if (values.udfs.find(i => i === '-1')) {
+                      // 全选
+                      const startUdfValsOrigin = startUdfVals.filter(k => k.id !== -1)
+                      requestVal = { udfInfo: startUdfValsOrigin.map(p => p.id) }
+                    } else {
+                      requestVal = { udfInfo: values.udfs.map(q => Number(q)) }
                     }
                   }
+                } else {
+                  const mergedData = {}
+                  const autoRegisteredData = this.formatTopicInfo(streamStartFormData, 'auto', values, offsetText)
+                  const userDefinedData = this.formatTopicInfo(userDefinedTopics, 'user', values, offsetText)
+                  mergedData.autoRegisteredTopics = autoRegisteredData || []
+                  mergedData.userDefinedTopics = userDefinedData || []
+                  mergedData.autoRegisteredTopics.forEach(v => {
+                    v.name = transformStringWithDot(v.name, false)
+                  })
+                  mergedData.userDefinedTopics.forEach(v => {
+                    v.name = transformStringWithDot(v.name, false)
+                  })
+                  if (!values.udfs) {
+                    requestVal = { topicInfo: mergedData }
+                  } else {
+                    if (values.udfs.find(i => i === '-1')) {
+                      // 全选
+                      const startUdfValsOrigin = startUdfVals.filter(k => k.id !== -1)
+                      requestVal = {
+                        udfInfo: startUdfValsOrigin.map(p => p.id),
+                        topicInfo: mergedData
+                      }
+                    } else {
+                      requestVal = {
+                        udfInfo: values.udfs.map(q => Number(q)),
+                        topicInfo: mergedData
+                      }
+                    }
+                  }
                 }
-              }
-              break
-            case 'renew':
-              if (!streamStartFormData) {
-                requestVal = !values.udfs ? {} : { udfInfo: values.udfs.map(q => Number(q)) }
-              } else {
-                const mergedData = {}
-                const autoRegisteredData = this.formatTopicInfo(streamStartFormData, 'auto', values, offsetText)
-                const userDefinedData = this.formatTopicInfo(userDefinedTopics, 'user', values, offsetText)
+                break
+              case 'renew':
+                if (!streamStartFormData) {
+                  requestVal = !values.udfs ? {} : { udfInfo: values.udfs.map(q => Number(q)) }
+                } else {
+                  const mergedData = {}
+                  const autoRegisteredData = this.formatTopicInfo(streamStartFormData, 'auto', values, offsetText)
+                  const userDefinedData = this.formatTopicInfo(userDefinedTopics, 'user', values, offsetText)
 
-                // 接口参数：改动的topicInfo
-                mergedData.autoRegisteredTopics = this.diffTopicInfo(streamStartFormData, autoRegisteredData)
-                mergedData.userDefinedTopics = this.diffTopicInfo(this.state.tempUserTopics, userDefinedData)
-                // mergedData.autoRegisteredTopics.length === 0 ? delete mergedData.autoRegisteredTopics : mergedData.userDefinedTopics.length === 0 ? delete mergedData.userDefinedTopics : ''
-                // if (mergedData.autoRegisteredTopics.length === 0 && mergedData.userDefinedTopics.length === 0) {
-                //   requestVal = (!values.udfs) ? {} : { udfInfo: values.udfs.map(q => Number(q)) }
-                // } else {
-                requestVal = (!values.udfs) ? { topicInfo: mergedData } : { udfInfo: values.udfs.map(q => Number(q)), topicInfo: mergedData }
-              //   }
-              }
-              break
-          }
+                  // 接口参数：改动的topicInfo
+                  mergedData.autoRegisteredTopics = this.diffTopicInfo(streamStartFormData, autoRegisteredData)
+                  mergedData.userDefinedTopics = this.diffTopicInfo(this.state.tempUserTopics, userDefinedData)
+                  mergedData.autoRegisteredTopics.forEach(v => {
+                    v.name = transformStringWithDot(v.name, false)
+                  })
+                  mergedData.userDefinedTopics.forEach(v => {
+                    v.name = transformStringWithDot(v.name, false)
+                  })
+                  // mergedData.autoRegisteredTopics.length === 0 ? delete mergedData.autoRegisteredTopics : mergedData.userDefinedTopics.length === 0 ? delete mergedData.userDefinedTopics : ''
+                  // if (mergedData.autoRegisteredTopics.length === 0 && mergedData.userDefinedTopics.length === 0) {
+                  //   requestVal = (!values.udfs) ? {} : { udfInfo: values.udfs.map(q => Number(q)) }
+                  // } else {
+                  requestVal = (!values.udfs) ? { topicInfo: mergedData } : { udfInfo: values.udfs.map(q => Number(q)), topicInfo: mergedData }
+                //   }
+                }
+                break
+            }
 
-          let actionTypeRequest = ''
-          let actionTypeMsg = ''
-          if (actionType === 'start') {
-            actionTypeRequest = 'start'
-            actionTypeMsg = locale === 'en' ? 'Start Successfully!' : '启动成功！'
-          } else if (actionType === 'renew') {
-            actionTypeRequest = 'renew'
-            actionTypeMsg = locale === 'en' ? 'Renew Successfully!' : '生效！'
-          }
+            let actionTypeRequest = ''
+            let actionTypeMsg = ''
+            if (actionType === 'start') {
+              actionTypeRequest = 'start'
+              actionTypeMsg = locale === 'en' ? 'Start Successfully!' : '启动成功！'
+            } else if (actionType === 'renew') {
+              actionTypeRequest = 'renew'
+              actionTypeMsg = locale === 'en' ? 'Renew Successfully!' : '生效！'
+            }
 
-          this.props.onStartOrRenewStream(projectIdGeted, streamIdGeted, requestVal, actionTypeRequest, (result) => {
-            this.setState({
-              startModalVisible: false,
-              streamStartFormData: [],
-              unValidate: false
+            this.props.onStartOrRenewStream(projectIdGeted, streamIdGeted, requestVal, actionTypeRequest, (result) => {
+              this.setState({
+                startModalVisible: false,
+                streamStartFormData: [],
+                userDefinedData: [],
+                tempUserTopics: [],
+                unValidate: false
+              })
+              message.success(actionTypeMsg, 3)
+            }, (result) => {
+              const failText = locale === 'en' ? 'Operation failed:' : '操作失败：'
+              message.error(`${failText} ${result}`, 3)
+              this.setState({unValidate: false})
             })
-            message.success(actionTypeMsg, 3)
-          }, (result) => {
-            const failText = locale === 'en' ? 'Operation failed:' : '操作失败：'
-            message.error(`${failText} ${result}`, 3)
-            this.setState({unValidate: false})
-          })
-        }
-      })
-    }, 20)
+          }
+        })
+      }
+    )
   }
 
   formatTopicInfo (data = [], type = 'auto', values, offsetText) {
@@ -505,7 +547,7 @@ export class Manager extends React.Component {
 
       const offsetArr = []
       for (let r = 0; r < partitionTemp.length; r++) {
-        const offsetArrTemp = values[`${i.name.replace(/\./g, '-')}_${r}_${type}`]
+        const offsetArrTemp = values[`${i.name}_${r}_${type}`]
         offsetArrTemp === ''
           ? message.warning(offsetText, 3)
           : offsetArr.push(`${r}:${offsetArrTemp}`)
@@ -516,39 +558,53 @@ export class Manager extends React.Component {
         // id: i.id,
         name: i.name,
         partitionOffsets: offsetVal,
-        rate: Number(values[`${i.name.replace(/\./g, '-')}_${i.rate}_rate`])
+        rate: Number(values[`${i.name}_${i.rate}_rate`])
       }
       return robj
     })
   }
 
   diffTopicInfo (oldData = [], newData = []) {
-    if (oldData.length === 0 || newData.length === 0) return
     let topicInfoTemp = []
-    for (let g = 0; g < newData.length; g++) {
-      for (let f = 0; f < oldData.length; f++) {
-        if (oldData[f].name === newData[g].name) {
-          let obj = {
-            name: newData[g].name,
-            partitionOffsets: newData[g].partitionOffsets,
-            rate: newData[g].rate
+    if (oldData.length === 0 && newData.length > 0) {
+      topicInfoTemp = newData.map(v => {
+        let obj = {
+          name: v.name,
+          partitionOffsets: v.partitionOffsets,
+          rate: v.rate,
+          action: 1
+        }
+        return obj
+      })
+    } else if (oldData.length > 0 && newData.length === 0) {
+      topicInfoTemp = []
+    } else {
+      for (let g = 0; g < newData.length; g++) {
+        for (let f = 0; f < oldData.length; f++) {
+          if (oldData[f].name === newData[g].name) {
+            let obj = {
+              name: newData[g].name,
+              partitionOffsets: newData[g].partitionOffsets,
+              rate: newData[g].rate
+            }
+            if (
+              oldData[f].consumedLatestOffset === newData[g].partitionOffsets &&
+              oldData[f].rate === newData[g].rate
+            ) {
+              obj.action = 0
+            } else {
+              obj.action = 1
+            }
+            topicInfoTemp.push(obj)
+            break
+          } else if (f === oldData.length - 1) {
+            topicInfoTemp.push({
+              name: newData[g].name,
+              partitionOffsets: newData[g].partitionOffsets,
+              rate: newData[g].rate,
+              action: 1
+            })
           }
-          if (
-            oldData[f].consumedLatestOffset === newData[g].partitionOffsets &&
-            oldData[f].rate === newData[g].rate
-          ) {
-            obj.action = 0
-          } else {
-            obj.action = 1
-          }
-          topicInfoTemp.push(obj)
-        } else if (f === oldData.length - 1) {
-          topicInfoTemp.push({
-            name: newData[g].name,
-            partitionOffsets: newData[g].partitionOffsets,
-            rate: newData[g].rate,
-            action: 1
-          })
         }
       }
     }
@@ -758,7 +814,7 @@ export class Manager extends React.Component {
       refreshStreamLoading, refreshStreamText, showStreamdetails, logsModalVisible,
       logsContent, refreshLogLoading, refreshLogText, logsProjectId, logsStreamId,
       streamStartFormData, actionType, autoRegisteredTopics, userDefinedTopics,
-      startUdfVals, renewUdfVals, currentUdfVal, topicInfoModal, currentStreams
+      startUdfVals, renewUdfVals, currentUdfVal, currentStreams
     } = this.state
     const { className, onShowAddStream, onShowEditStream, streamClassHide, streamStartModalLoading, roleType } = this.props
 
@@ -910,7 +966,7 @@ export class Manager extends React.Component {
         )
       }
     }, {
-      title: 'Type',
+      title: 'Stream Type',
       dataIndex: 'streamType',
       key: 'streamType',
       sorter: (a, b) => a.streamType < b.streamType ? -1 : 1,
@@ -921,6 +977,18 @@ export class Manager extends React.Component {
         {text: 'routing', value: 'routing'}
       ],
       filteredValue: filteredInfo.streamType,
+      onFilter: (value, record) => record.streamType.includes(value)
+    }, {
+      title: 'Function Type',
+      dataIndex: 'functionType',
+      key: 'functionType',
+      sorter: (a, b) => a.functionType < b.functionType ? -1 : 1,
+      sortOrder: sortedInfo.columnKey === 'streamType' && sortedInfo.order,
+      filters: [
+        {text: 'spark', value: 'spark'},
+        {text: 'flink', value: 'flink'}
+      ],
+      filteredValue: filteredInfo.functionType,
       onFilter: (value, record) => record.streamType.includes(value)
     }, {
       title: 'Kafka',
@@ -1027,13 +1095,14 @@ export class Manager extends React.Component {
           const deleteFormat = <FormattedMessage {...messages.streamDelete} />
           const sureDeleteFormat = <FormattedMessage {...messages.streamSureDelete} />
           const startFormat = <FormattedMessage {...messages.streamTableStart} />
+          const sureStartFormat = <FormattedMessage {...messages.streaSureStart} />
           const renewFormat = <FormattedMessage {...messages.streamTableRenew} />
           const stopFormat = <FormattedMessage {...messages.streamTableStop} />
           const sureStopFormat = <FormattedMessage {...messages.streamSureStop} />
           const modifyFormat = <FormattedMessage {...messages.streamModify} />
 
-          const { disableActions } = record
-          const strDelete = disableActions.includes('delete')
+          const { disableActions, hideActions } = record
+          let strDelete = disableActions.includes('delete')
             ? (
               <Tooltip title={deleteFormat}>
                 <Button icon="delete" shape="circle" type="ghost" disabled></Button>
@@ -1047,11 +1116,27 @@ export class Manager extends React.Component {
               </Popconfirm>
             )
 
-          const strStart = disableActions.includes('start')
-            ? <Button icon="caret-right" shape="circle" type="ghost" disabled></Button>
-            : <Button icon="caret-right" shape="circle" type="ghost" onClick={this.onShowEditStart(record, 'start')}></Button>
-
-          const strStop = disableActions.includes('stop')
+          let strStart = ''
+          if (record.streamType === 'spark') {
+            strStart = disableActions.includes('start')
+              ? <Button icon="caret-right" shape="circle" type="ghost" disabled></Button>
+              : <Button icon="caret-right" shape="circle" type="ghost" onClick={this.onShowEditStart(record, 'start')}></Button>
+          } else if (record.streamType === 'flink') {
+            strStart = record.disableActions.includes('start')
+            ? (
+              <Tooltip title={startFormat}>
+                <Button icon="caret-right" shape="circle" type="ghost" disabled></Button>
+              </Tooltip>
+            )
+            : (
+              <Popconfirm placement="bottom" title={sureStartFormat} okText="Yes" cancelText="No" onConfirm={this.startFlink(record.id)}>
+                <Tooltip title={startFormat}>
+                  <Button icon="caret-right" shape="circle" type="ghost"></Button>
+                </Tooltip>
+              </Popconfirm>
+            )
+          }
+          let strStop = disableActions.includes('stop')
             ? (
               <Tooltip title={stopFormat}>
                 <Button shape="circle" type="ghost" disabled>
@@ -1069,10 +1154,15 @@ export class Manager extends React.Component {
               </Popconfirm>
             )
 
-          const strRenew = disableActions.includes('renew')
+          let strRenew = disableActions.includes('renew')
             ? <Button icon="check" shape="circle" type="ghost" disabled></Button>
             : <Button icon="check" shape="circle" type="ghost" onClick={this.updateStream(record, 'renew')}></Button>
-
+          if (hideActions) {
+            if (hideActions.includes('delete')) strDelete = ''
+            if (hideActions.includes('start')) strStart = ''
+            if (hideActions.includes('stop')) strStop = ''
+            if (hideActions.includes('renew')) strRenew = ''
+          }
           streamActionSelect = (
             <span>
               <Tooltip title={modifyFormat}>
@@ -1094,15 +1184,32 @@ export class Manager extends React.Component {
         if (showStreamdetails) {
           const detailTemp = showStreamdetails.stream
 
-          const topicTemp = showStreamdetails.topicInfo.autoRegisteredTopics
-          const topicFinal = topicTemp.map(s => (
-            <li key={s.name}>
-              <strong>Topic Name：</strong>{s.name}
-              <strong>；Partition Offsets：</strong>{s.consumedLatestOffset}
-              <strong>；Rate：</strong>{s.rate}
-            </li>
-          ))
-
+          const topicTemp = showStreamdetails.topicInfo && showStreamdetails.topicInfo.autoRegisteredTopics
+          const topicUserTemp = showStreamdetails.topicInfo && showStreamdetails.topicInfo.userDefinedTopics
+          let topicFinal = ''
+          let topicUserFinal = ''
+          if (topicTemp) {
+            topicFinal = topicTemp.map(s => (
+              <li key={s.name}>
+                <strong>Topic Name：</strong>{s.name}
+                <strong>；Consumed Latest Offset：</strong>{s.consumedLatestOffset}
+                <strong>；Earliest Kafka Offset：</strong>{s.kafkaEarliestOffset}
+                <strong>；Latest Kafka Offset：</strong>{s.kafkaLatestOffset}
+                <strong>；Rate：</strong>{s.rate}
+              </li>
+            ))
+          }
+          if (topicUserTemp) {
+            topicUserFinal = topicUserTemp.map(s => (
+              <li key={s.name}>
+                <strong>Topic Name：</strong>{s.name}
+                <strong>；Consumed Latest Offset：</strong>{s.consumedLatestOffset}
+                <strong>；Earliest Kafka Offset：</strong>{s.kafkaEarliestOffset}
+                <strong>；Latest Kafka Offset：</strong>{s.kafkaLatestOffset}
+                <strong>；Rate：</strong>{s.rate}
+              </li>
+            ))
+          }
           const currentudfTemp = showStreamdetails.currentUdf
           const currentUdfFinal = currentudfTemp.length !== 0
             ? currentudfTemp.map(s => (
@@ -1128,14 +1235,15 @@ export class Manager extends React.Component {
           streamDetailContent = (
             <div className="stream-detail">
               <p className={streamClassHide}><strong>   Project Id：</strong>{detailTemp.projectId}</p>
-              <p><strong>   Topic Info：</strong>{topicFinal}</p>
+              <p><strong>   Auto Registered Topics：</strong>{topicFinal}</p>
+              <p><strong>   User Defined Topics：</strong>{topicUserFinal}</p>
               <p><strong>   Current Udf：</strong>{currentUdfFinal}</p>
               {/* <p><strong>   Using Udf：</strong>{usingUdfTempFinal}</p> */}
               <p><strong>   Description：</strong>{detailTemp.desc}</p>
 
               <p><strong>   Launch Config：</strong>{detailTemp.launchConfig}</p>
-              <p><strong>   spark Config：</strong>{detailTemp.sparkConfig}</p>
-              <p><strong>   start Config：</strong>{detailTemp.startConfig}</p>
+              <p><strong>   Stream Config：</strong>{detailTemp.streamConfig}</p>
+              <p><strong>   Start Config：</strong>{detailTemp.startConfig}</p>
 
               <p><strong>   Create Time：</strong>{detailTemp.createTime}</p>
               <p><strong>   Update Time：</strong>{detailTemp.updateTime}</p>
@@ -1177,10 +1285,10 @@ export class Manager extends React.Component {
 
     const pagination = {
       defaultPageSize: 10,
-      showSizeChanger: true,
-      onChange: (current) => {
-        console.log('Current: ', current)
-      }
+      showSizeChanger: true
+      // onChange: (current) => {
+      //   console.log('Current: ', current)
+      // }
     }
 
     const streamStartForm = startModalVisible
@@ -1254,7 +1362,7 @@ export class Manager extends React.Component {
           onCancel={this.handleEditStartCancel}
           footer={[
             <Button
-              className={`query-offset-btn ${topicInfoModal}`}
+              className={`query-offset-btn`}
               key="query"
               size="large"
               onClick={this.queryLastestoffset}
@@ -1262,7 +1370,7 @@ export class Manager extends React.Component {
               <FormattedMessage {...messages.streamModalView} /> Latest Offset
             </Button>,
             <Button
-              className={`edit-topic-btn ${topicInfoModal === '' ? '' : 'hide'}`}
+              className={`edit-topic-btn`}
               type="default"
               onClick={this.onChangeEditSelect}
               key="renewEdit"
@@ -1361,4 +1469,3 @@ const mapStateToProps = createStructuredSelector({
 })
 
 export default connect(mapStateToProps, mapDispatchToProps)(Manager)
-

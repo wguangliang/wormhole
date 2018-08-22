@@ -23,7 +23,9 @@ package edp.rider.common
 import java.util.concurrent.TimeUnit
 
 import edp.rider.RiderStarter.modules.config
+import edp.rider.rest.persistence.entities.{FlinkDefaultConfig, FlinkResourceConfig}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
+import scala.collection.JavaConversions._
 
 import scala.concurrent.duration.{FiniteDuration, _}
 
@@ -62,10 +64,14 @@ case class RiderDatabase(url: String, user: String, pwd: String)
 
 case class RiderSpark(user: String,
                       sshPort: Int,
-                      spark_home: String,
-                      queue_name: String,
-                      app_tags: String,
-                      hdfs_root: String,
+                      sparkHome: String,
+                      queueName: String,
+                      appTags: String,
+                      hdfsRoot: String,
+                      remoteHdfsRoot: Option[String],
+                      remoteHdfsNamenodeHosts: Option[String],
+                      remoteHdfsActiveNamenodeHost: Option[String],
+                      remoteHdfsNamenodeIds: Option[String],
                       rm1Url: String,
                       rm2Url: String,
                       kafkaSessionTimeOut: Int,
@@ -83,6 +89,9 @@ case class RiderSpark(user: String,
                       executorNum: Int,
                       executorMemory: Int,
                       executorCores: Int,
+                      batchDurationSec: Int,
+                      parallelismPartition: Int,
+                      maxPartitionFetchMb: Int,
                       topicDefaultRate: Int,
                       jobMaxRecordPerPartitionProcessed: Int,
                       driverExtraConf: String,
@@ -91,6 +100,7 @@ case class RiderSpark(user: String,
                       alert: Boolean,
                       metricsConfPath: String,
                       alertEmails: String)
+
 
 case class RiderEs(url: String,
                    wormholeIndex: String,
@@ -126,6 +136,20 @@ case class LdapInfo(enabled: Boolean,
                     connectTimeout: Int,
                     connectPoolEnabled: Boolean)
 
+case class RiderFlink(homePath: String,
+                      yarnQueueName: String,
+                      defaultRate: Int,
+                      defaultParallelism: Int,
+                      jarPath: String,
+                      clientLogPath: String,
+                      kafkaSessionTimeOut: Int,
+                      kafkaGroupMaxSessionTimeOut: Int)
+
+case class DBusConfig(loginUrl: String,
+                      user: String,
+                      password: String,
+                      namespaceUrl: String)
+
 
 object RiderConfig {
 
@@ -141,7 +165,7 @@ object RiderConfig {
     getStringConfig("wormholeServer.normal.username", "normal"),
     getStringConfig("wormholeServer.normal.password", "normal"))
 
-  lazy val udfRootPath = s"${spark.hdfs_root.stripSuffix("/")}/udfjars"
+  lazy val udfRootPath = s"${spark.hdfsRoot.stripSuffix("/")}/udfjars"
 
   lazy val riderDomain = getStringConfig("wormholeServer.domain.url", "")
 
@@ -189,11 +213,11 @@ object RiderConfig {
   lazy val zk = config.getString("zookeeper.connection.url")
 
   lazy val appTags = getStringConfig("spark.app.tags", "wormhole")
-  lazy val wormholeClientLogPath = getStringConfig("spark.wormhole.client.log.root.path", s"${RiderConfig.riderRootPath}/logs/streams").concat("/")
-  lazy val wormholeJarPath = getStringConfig("spark.wormhole.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-ums_1.3-sparkx_2.2.0-0.4.2-SNAPSHOTS-jar-with-dependencies.jar")
-  lazy val wormholeKafka08JarPath = getStringConfig("spark.wormhole.kafka08.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-ums_1.3-sparkx_2.2.0-0.4.2-SNAPSHOTS-jar-with-dependencies-kafka08.jar")
+  lazy val wormholeClientLogPath = getStringConfig("spark.wormhole.client.log.path", s"${RiderConfig.riderRootPath}/logs/streams")
+  lazy val wormholeJarPath = getStringConfig("spark.wormhole.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-ums_1.3-sparkx_2.2.0-0.5.1-beta-jar-with-dependencies.jar")
+  lazy val wormholeKafka08JarPath = getStringConfig("spark.wormhole.kafka08.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-ums_1.3-sparkx_2.2.0-0.5.1-beta-jar-with-dependencies-kafka08.jar")
   lazy val kafka08StreamNames = getStringConfig("spark.wormhole.kafka08.streams", "")
-  lazy val sparkxInterfaceJarPath = getStringConfig("spark.wormhole.sparkxinterface.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-sparkxinterface-0.4.2-SNAPSHOTS.jar")
+  lazy val sparkxInterfaceJarPath = getStringConfig("spark.wormhole.sparkxinterface.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-sparkxinterface-0.5.1-beta.jar")
   lazy val kafka11StreamNames = getStringConfig("spark.wormhole.kafka11.streams", "")
   lazy val wormholeUser = config.getString("spark.wormholeServer.user")
   lazy val sshPort = config.getInt("spark.wormholeServer.ssh.port")
@@ -207,13 +231,17 @@ object RiderConfig {
   lazy val kafkaConsumerCache = getBooleanConfig("spark.streaming.kafka.consumer.cache.enabled", false)
   lazy val streamDefaultDriverJvmConfig = getStringConfig("spark.driver.extraJavaOptions", "spark.driver.extraJavaOptions=-XX:+UseConcMarkSweepGC -XX:+PrintGCDetails -XX:-UseGCOverheadLimit -Dlog4j.configuration=sparkx.log4j.properties -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/wormhole/gc/")
   lazy val streamDefaultExecutorJvmConfig = getStringConfig("spark.executor.extraJavaOptions", "spark.executor.extraJavaOptions=-XX:+UseConcMarkSweepGC -XX:+PrintGCDetails -XX:-UseGCOverheadLimit -Dlog4j.configuration=sparkx.log4j.properties -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/wormhole/gc")
-  lazy val streamDefaultSaprkConfig = getStringConfig("spark.wormhole.default.conf", s"spark.locality.wait=10ms,spark.shuffle.spill.compress=false,spark.io.compression.codec=org.apache.spark.io.SnappyCompressionCodec,spark.streaming.stopGracefullyOnShutdown=true,spark.scheduler.listenerbus.eventqueue.size=1000000,spark.sql.ui.retainedExecutions=3,spark.streaming.kafka.consumer.cache.enabled=$kafkaConsumerCache")
+  lazy val streamDefaultSparkConfig = getStringConfig("spark.wormhole.default.conf", s"spark.locality.wait=10ms,spark.shuffle.spill.compress=false,spark.io.compression.codec=org.apache.spark.io.SnappyCompressionCodec,spark.streaming.stopGracefullyOnShutdown=true,spark.scheduler.listenerbus.eventqueue.size=1000000,spark.sql.ui.retainedExecutions=3,spark.streaming.kafka.consumer.cache.enabled=$kafkaConsumerCache")
   lazy val spark = RiderSpark(wormholeUser,
     sshPort,
     config.getString("spark.spark.home"),
     config.getString("spark.yarn.queue.name"),
     appTags,
     config.getString("spark.wormhole.hdfs.root.path"),
+    getStringConfig("spark.wormhole.hdfslog.remote.root.path", None),
+    getStringConfig("spark.wormhole.hdfslog.remote.hdfs.namenode.hosts", None),
+    getStringConfig("spark.wormhole.hdfslog.remote.hdfs.activenamenode.host", None),
+    getStringConfig("spark.wormhole.hdfslog.remote.hdfs.namenode.ids", None),
     rm1Url, rm2Url, kafkaSessionTimeOut, kafkaGroupMaxSessionTimeOut,
     s"""
        |--class edp.wormhole.WormholeStarter \\
@@ -232,8 +260,8 @@ object RiderConfig {
     s"${RiderConfig.riderRootPath}/conf/sparkx.log4j.properties",
     wormholeJarPath,
     wormholeKafka08JarPath, kafka08StreamNames, sparkxInterfaceJarPath,
-    consumer.heartbeatTopic, 2, 1, 6, 4, 2, 100, 600,
-    streamDefaultDriverJvmConfig, streamDefaultExecutorJvmConfig, streamDefaultSaprkConfig, alert, metricsConfPath, alertEmails)
+    consumer.heartbeatTopic, 2, 1, 6, 2, 1, 30, 6, 10, 100, 600,
+    streamDefaultDriverJvmConfig, streamDefaultExecutorJvmConfig, streamDefaultSparkConfig, alert, metricsConfPath, alertEmails)
 
   lazy val es =
     if (config.hasPath("elasticSearch") && config.getString("elasticSearch.http.url").nonEmpty) {
@@ -258,13 +286,20 @@ object RiderConfig {
   lazy val maintenance = Maintenance(config.getInt("maintenance.mysql.feedback.remain.maxDays"),
     config.getInt("maintenance.elasticSearch.feedback.remain.maxDays"))
 
-  lazy val dbusUrl =
-    if (config.hasPath("dbus.namespace.rest.api.url"))
-      config.getStringList("dbus.namespace.rest.api.url")
-    else null
+  lazy val dbusConfigList =
+    if (config.hasPath("dbus.api"))
+      config.getObjectList("dbus.api").toList.map(configObject => {
+        val dbusApiConfig = configObject.toConfig
+        DBusConfig(dbusApiConfig.getString("login.url"),
+          dbusApiConfig.getString("login.email"),
+          dbusApiConfig.getString("login.password"),
+          dbusApiConfig.getString("synchronization.namespace.url"))
+      })
+    else List()
 
-  lazy val riderInfo = RiderInfo(zk, consumer.brokers, consumer.feedbackTopic, spark.wormholeHeartBeatTopic, spark.hdfs_root,
-    spark.user, spark.app_tags, spark.rm1Url, spark.rm2Url)
+
+  lazy val riderInfo = RiderInfo(zk, consumer.brokers, consumer.feedbackTopic, spark.wormholeHeartBeatTopic, spark.hdfsRoot,
+    spark.user, spark.appTags, spark.rm1Url, spark.rm2Url)
 
   lazy val ldapEnabled = getBooleanConfig("ldap.enabled", false)
 
@@ -278,9 +313,26 @@ object RiderConfig {
 
   lazy val ldap = LdapInfo(ldapEnabled, ldapUser, ldapPwd, ldapUrl, ldapDc, readTimeout, connectTimeout, ldapPoolEnabled)
 
+  //set default flink stream config
+
+  lazy val defaultFlinkConfig = FlinkDefaultConfig("", FlinkResourceConfig(2, 6, 1, 2), "")
+
+  lazy val flink = RiderFlink(config.getString("flink.home"), config.getString("flink.yarn.queue.name"), 1, 1,
+    getStringConfig("flink.wormhole.jar.path", s"${RiderConfig.riderRootPath}/lib/wormhole-ums_1.3-flinkx_1.5.1-0.5.1-beta-jar-with-dependencies.jar"),
+    getStringConfig("flink.wormhole.client.log.path", s"$riderRootPath/logs/flows"),
+    getIntConfig("spark.kafka.session.timeout", 30000),
+    getIntConfig("spark.kafka.group.max.session.timeout.ms", 60000)
+  )
+
   def getStringConfig(path: String, default: String): String = {
     if (config.hasPath(path) && config.getString(path) != null && config.getString(path) != "" && config.getString(path) != " ")
       config.getString(path)
+    else default
+  }
+
+  def getStringConfig(path: String, default: Option[String]): Option[String] = {
+    if (config.hasPath(path) && config.getString(path) != null && config.getString(path) != "" && config.getString(path) != " ")
+      Option(config.getString(path))
     else default
   }
 

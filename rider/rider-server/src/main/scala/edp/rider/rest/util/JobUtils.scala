@@ -29,14 +29,14 @@ import edp.rider.rest.util.CommonUtils._
 import edp.rider.rest.util.FlowUtils._
 import edp.rider.rest.util.NamespaceUtils._
 import edp.rider.rest.util.NsDatabaseUtils._
-import edp.rider.spark.SparkStatusQuery.getSparkJobStatus
-import edp.rider.spark.SubmitSparkJob._
+import edp.rider.yarn.YarnStatusQuery.getSparkJobStatus
+import edp.rider.yarn.SubmitYarnJob._
 import edp.rider.wormhole._
-import edp.wormhole.common.ConnectionConfig
-import edp.wormhole.common.util.CommonUtils._
-import edp.wormhole.common.util.DateUtils._
-import edp.wormhole.common.util.JsonUtils._
 import edp.wormhole.ums.UmsDataSystem
+import edp.wormhole.util.JsonUtils._
+import edp.wormhole.util.CommonUtils._
+import edp.wormhole.util.DateUtils
+import edp.wormhole.util.config.ConnectionConfig
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Await
@@ -46,7 +46,7 @@ object JobUtils extends RiderLogger {
   def getBatchJobConfigConfig(job: Job) =
     BatchJobConfig(getSourceConfig(job.sourceNs, job.eventTsStart, job.eventTsEnd, job.sourceConfig),
       getTranConfig(job.tranConfig.getOrElse(""), job.sinkConfig.getOrElse(""), job.sinkNs, job.jobType),
-      getSinkConfig(job.sinkNs, job.sinkConfig.getOrElse(""), job.jobType),
+      getSinkConfig(job.sinkNs, job.sinkConfig.getOrElse(""), job.jobType, job.eventTsEnd),
       getJobConfig(job.name, job.sparkConfig))
 
   def getSourceConfig(sourceNs: String, eventTsStart: String = null, eventTsEnd: String = null, sourceConfig: Option[String]) = {
@@ -55,12 +55,16 @@ object JobUtils extends RiderLogger {
     val sourceTypeFinal = "hdfs_txt"
     val specialConfig = if (sourceConfig.isDefined && sourceConfig.get != "" && sourceConfig.get.contains("protocol")) Some(base64byte2s(getConsumptionProtocol(sourceConfig.get).trim.getBytes())) else None
     val (instance, db, _) = modules.namespaceDal.getNsDetail(sourceNs)
+    val hdfsRoot = RiderConfig.spark.remoteHdfsRoot match {
+      case Some(_) => RiderConfig.spark.remoteHdfsActiveNamenodeHost.get
+      case None => RiderConfig.spark.hdfsRoot
+    }
     SourceConfig(eventTsStartFinal, eventTsEndFinal, sourceNs,
-      ConnectionConfig(RiderConfig.spark.hdfs_root, None, None, None),
+      ConnectionConfig(hdfsRoot, None, None, None),
       getSourceProcessClass(sourceTypeFinal), specialConfig)
   }
 
-  def getSinkConfig(sinkNs: String, sinkConfig: String, jobType: String) = {
+  def getSinkConfig(sinkNs: String, sinkConfig: String, jobType: String, eventTsEnd: String) = {
     val (instance, db, ns) = modules.namespaceDal.getNsDetail(sinkNs)
 
     val maxRecord =
@@ -87,8 +91,20 @@ object JobUtils extends RiderLogger {
       None
     }
 
+    val sinkConnection =
+      if (instance.nsSys != UmsDataSystem.PARQUET.toString)
+        getConnConfig(instance, db)
+      else {
+        val endTs =
+          if (eventTsEnd != null && eventTsEnd != "" && eventTsEnd != "30000101000000")
+            eventTsEnd
+          else currentNodSec
+        val connUrl = getConnUrl(instance, db).stripSuffix("/") + "/" + sinkNs + "/" + endTs
+        ConnectionConfig(connUrl, db.user, db.pwd, getDbConfig(instance.nsSys, db.config.getOrElse("")))
+      }
+
     val sinkSys = if (jobType != JobType.BACKFILL.toString) ns.nsSys else UmsDataSystem.KAFKA.toString
-    SinkConfig(sinkNs, getConnConfig(instance, db), maxRecord, Some(getSinkProcessClass(sinkSys, ns.sinkSchema)), specialConfig, sinkKeys, projection)
+    SinkConfig(sinkNs, sinkConnection, maxRecord, Some(getSinkProcessClass(sinkSys, ns.sinkSchema)), specialConfig, sinkKeys, projection)
   }
 
   def getTranConfig(tranConfig: String, sinkConfig: String, sinkNs: String, jobType: String) = {
@@ -185,7 +201,7 @@ object JobUtils extends RiderLogger {
   def startJob(job: Job, logPath: String) = {
     //    runShellCommand(s"rm -rf ${SubmitSparkJob.getLogPath(job.name)}")
     val startConfig: StartConfig = if (job.startConfig.isEmpty) null else json2caseClass[StartConfig](job.startConfig)
-    val command = generateStreamStartSh(s"'''${base64byte2s(caseClass2json(getBatchJobConfigConfig(job)).trim.getBytes)}'''", job.name, logPath,
+    val command = generateSparkStreamStartSh(s"'''${base64byte2s(caseClass2json(getBatchJobConfigConfig(job)).trim.getBytes)}'''", job.name, logPath,
       if (startConfig != null) startConfig else StartConfig(RiderConfig.spark.driverCores, RiderConfig.spark.driverMemory, RiderConfig.spark.executorNum, RiderConfig.spark.executorMemory, RiderConfig.spark.executorCores),
       if (job.sparkConfig.isDefined && !job.sparkConfig.get.isEmpty) job.sparkConfig.get else Seq(RiderConfig.spark.driverExtraConf, RiderConfig.spark.executorExtraConf).mkString(",").concat(RiderConfig.spark.sparkConfig),
       "job"
@@ -196,7 +212,7 @@ object JobUtils extends RiderLogger {
 
   def genJobName(projectId: Long, sourceNs: String, sinkNs: String) = {
     val projectName = Await.result(modules.projectDal.findById(projectId), minTimeOut).head.name
-    s"wormhole_${projectName}_job_${sourceNs}_${sinkNs}_$currentyyyyMMddHHmmss"
+    s"wormhole_${projectName}_job_${sourceNs}_${sinkNs}_$DateUtils.currentyyyyMMddHHmmss"
   }
 
   def refreshJob(id: Long) = {
