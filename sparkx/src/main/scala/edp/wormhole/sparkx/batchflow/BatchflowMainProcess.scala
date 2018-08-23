@@ -79,6 +79,7 @@ object BatchflowMainProcess extends EdpLogging {
 
         logInfo("start doDirectiveTopic")
         val directiveTs = System.currentTimeMillis
+        //TODO 更新topic信息
         BatchflowDirective.doDirectiveTopic(config, stream)
 
         logInfo("start Repartition")
@@ -90,6 +91,7 @@ object BatchflowMainProcess extends EdpLogging {
         }).repartition(config.rdd_partition_number) else streamRdd.map(row => {
           (UmsCommonUtils.checkAndGetKey(row.key, row.value), row.value)
         })
+        //FIXME 注册UDF
         UdfDirective.registerUdfProcess(config.kafka_output.feedback_topic_name, config.kafka_output.brokers, session)
         //        dataRepartitionRdd.cache()
         //        dataRepartitionRdd.count()
@@ -98,6 +100,7 @@ object BatchflowMainProcess extends EdpLogging {
 
 
         logInfo("start create classifyRdd")
+        //FIXME 对数据进行分类，根据配置分类成主体数据、查询数据、其他数据
         val classifyRdd: RDD[(ListBuffer[((UmsProtocolType, String), Seq[UmsTuple])], ListBuffer[((UmsProtocolType, String), Seq[UmsTuple])], ListBuffer[String], Array[((UmsProtocolType, String), Seq[UmsField])])] = getClassifyRdd(dataRepartitionRdd).cache()
         val distinctSchema: mutable.Map[(UmsProtocolType, String), (Seq[UmsField], Long)] = getDistinctSchema(classifyRdd)
         //        classifyRdd.count
@@ -131,6 +134,7 @@ object BatchflowMainProcess extends EdpLogging {
           WormholeKafkaProducer.sendMessage(config.kafka_output.feedback_topic_name, FeedbackPriority.FeedbackPriority3, UmsProtocolUtils.feedbackStreamBatchError(config.spark_config.stream_id, DateUtils.currentDateTime, UmsFeedbackStatus.FAIL, e.getMessage, batchId), None, config.kafka_output.brokers)
           WormholeUtils.sendTopicPartitionOffset(offsetInfo, config.kafka_output.feedback_topic_name, config, batchId)
       }
+      //FIXME 暂时取消异步提交位点的功能
       stream.asInstanceOf[CanCommitOffsets].commitAsync(offsetInfo.toArray)
     }
     )

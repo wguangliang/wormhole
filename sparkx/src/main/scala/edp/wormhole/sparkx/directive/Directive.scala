@@ -38,11 +38,12 @@ trait Directive extends EdpLogging{
   }
 
   def doDirectiveTopic(config: WormholeConfig, stream: WormholeDirectKafkaInputDStream[String, String]):Unit = {
-    val addTopicList = ListBuffer.empty[(KafkaTopicConfig, Long)]
-    val delTopicList = mutable.ListBuffer.empty[(String, Long)]
+    val addTopicList = ListBuffer.empty[(KafkaTopicConfig, Long)] // 需要增加的topic
+    val delTopicList = mutable.ListBuffer.empty[(String, Long)]   // 需要删除的topic
+    // 需要增加或者删除的topic 是由OffsetPersistenceManager 管理的
     if (OffsetPersistenceManager.directiveList.size() > 0) {
       while (OffsetPersistenceManager.directiveList.size() > 0) {
-        val (subscribeTopic, unsubscribeTopic) = OffsetPersistenceManager.directiveList.poll()
+        val (subscribeTopic, unsubscribeTopic) = OffsetPersistenceManager.directiveList.poll() // 第一个是需要增加的topic，第二个是需要删除的topic信息。格式都是Ums
         logInfo("subscribeTopic:" + subscribeTopic)
         if (subscribeTopic != null)
           try {
@@ -65,6 +66,7 @@ trait Directive extends EdpLogging{
           addTpMap((topicName, partition.partition_num)) = (partition.offset, topic._1.topic_rate)
         })
       })
+      // 更新topic，并消费到指定offset
       stream.updateTopicOffset(addTpMap.map(tp => {
         (tp._1, (tp._2._1, tp._2._2))
       }).toMap, delTopicList.map(_._1).toSet)
