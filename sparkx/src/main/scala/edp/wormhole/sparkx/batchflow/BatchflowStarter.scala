@@ -38,7 +38,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 object BatchflowStarter extends App with EdpLogging {
   SparkContextUtils.setLoggerLevel()
 
-
+  // 传入的参数为能转换为WormholeConfig类型的字符串
   logInfo("swiftsConfig:" + args(0))
   val config: WormholeConfig = JsonUtils.json2caseClass[WormholeConfig](args(0))
   val appId = SparkUtils.getAppId
@@ -56,6 +56,9 @@ object BatchflowStarter extends App with EdpLogging {
   val session: SparkSession = SparkSession.builder().config(sparkConf).getOrCreate()
   val ssc: StreamingContext = new StreamingContext(sparkContext, Seconds(config.kafka_input.batch_duration_seconds))
 
+  /**
+    * 初始化udf，并zk监控
+    */
   UdfWatch.initUdf(config, appId,session)
 
 //  if (config.udf.isDefined) {

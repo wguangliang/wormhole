@@ -35,27 +35,49 @@ object DirectiveFlowWatch extends EdpLogging {
 
   val flowRelativePath = "/flow"
 
+  /**
+    * 初始化 flow
+    * 1)创建zk目录 /wormhole/${stream_id}/flow
+    * 2)监控该目录的子节点
+    * 3)
+    *
+    * @param config
+    * @param appId
+    */
   def initFlow(config: WormholeConfig, appId: String): Unit = {
     logInfo("init flow,appId=" + appId)
 
+    // 创建zk目录 /wormhole/${stream_id}/flow，在其目录下创建的节点是对应flow的内容
     val watchPath = WormholeConstants.CheckpointRootPath + config.spark_config.stream_id + flowRelativePath
     if(!WormholeZkClient.checkExist(config.zookeeper_path, watchPath))WormholeZkClient.createPath(config.zookeeper_path, watchPath)
-    val flowList = WormholeZkClient.getChildren(config.zookeeper_path, watchPath)
+    val flowList = WormholeZkClient.getChildren(config.zookeeper_path, watchPath) // 得到/wormhole/${stream_id}/flow目录下的所有节点。一个节点对应一个flow
     flowList.toArray.foreach(flow => {
-      val flowContent = WormholeZkClient.getData(config.zookeeper_path, watchPath + "/" + flow)
+      val flowContent = WormholeZkClient.getData(config.zookeeper_path, watchPath + "/" + flow)  // 得到flowContent，为ums结构的字符串
+      // 将该flowContent,解析为ums对象，根据该对象的内容启动不同的flow
       add(config.kafka_output.feedback_topic_name,config.kafka_output.brokers)(watchPath + "/" + flow, new String(flowContent))
     })
 
     WormholeZkClient.setPathChildrenCacheListener(config.zookeeper_path, watchPath, add(config.kafka_output.feedback_topic_name,config.kafka_output.brokers), remove(config.kafka_output.brokers), update(config.kafka_output.feedback_topic_name,config.kafka_output.brokers))
   }
 
+  /**
+    *
+    * @param feedbackTopicName  反馈topic
+    * @param brokers            反馈topic所在的brokers
+    * @param path               flow目录下的某个节点
+    * @param data               该节点的内容
+    * @param time               [没用到]
+    */
   def add(feedbackTopicName: String,brokers:String)(path: String, data: String, time: Long = 1): Unit = {
     try {
       logInfo("add"+data)
+      // 简单判断是否是ums
       if (!data.startsWith("{")) {
         logWarning("data is " + data + ", not in ums")
       } else {
-        val ums = UmsSchemaUtils.toUms(data)
+        // data是ums结构的字符串,返回ums结构体对象
+        val ums = UmsSchemaUtils.toUms(data) //ums结构对象
+        // 根据ums protocol的type不同，启动不同的处理方式
         ums.protocol.`type` match {
           case UmsProtocolType.DIRECTIVE_FLOW_START | UmsProtocolType.DIRECTIVE_FLOW_STOP =>
             BatchflowDirective.flowStartProcess(ums, feedbackTopicName, brokers)

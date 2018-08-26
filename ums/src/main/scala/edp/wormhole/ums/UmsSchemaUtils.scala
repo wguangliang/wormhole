@@ -30,6 +30,9 @@ import scala.collection.mutable.ArrayBuffer
 
 object UmsSchemaUtils extends UmsSchemaUtils
 
+/**
+  * ums解析工具
+  */
 trait UmsSchemaUtils {
   JsonUtils.json4sFormats = JsonUtils.json4sFormats + new EnumNameSerializer(UmsProtocolType) + new EnumNameSerializer(UmsFieldType)
 
@@ -37,17 +40,28 @@ trait UmsSchemaUtils {
 
   //def toUms1(json: String): Ums = json2caseClass[Ums](json)
 
+  /**
+    * ums结构的字符串,转换为ums结构体对象
+    * @param json
+    * @return
+    */
   def toUms(json: String): Ums = {
     val jsonObj: JSONObject = JSON.parseObject(json)
-    val protocol = jsonObj.getJSONObject("protocol").getString("type")
+    val protocol = jsonObj.getJSONObject("protocol").getString("type") // data_increment_data，protocol值都有什么，参考object UmsProtocolType extends Enumeration
     val schema = jsonObj.getJSONObject("schema")
     var context:Option[String] = None
-    if(jsonObj.containsKey("context")){
+    if(jsonObj.containsKey("context")){  // 查看是否包含context字段
       context=Some(jsonObj.getString("context"))
     }
 
-    val umsSchema = toUmsSchemaFromJsonObject(schema)
+    /**
+      * 解析schema部分
+      */
+    val umsSchema = toUmsSchemaFromJsonObject(schema) // 解析schema部分
 
+    /**
+      * 解析payload部分
+      */
     val payloadArr: Option[Seq[UmsTuple]] = parsePayload(jsonObj)
 //      if (jsonObj.containsKey("payload") && jsonObj.getJSONArray("payload").size() > 0) {
 //      val payloadJsonArr = jsonObj.getJSONArray("payload")
@@ -71,11 +85,31 @@ trait UmsSchemaUtils {
 //      None
 //    }
 
+    /**
+      * UmsProtocolType.umsProtocolType(protocol)解析protocol部分
+      */
+    /**
+      * 组合Ums对象，并返回
+      */
     Ums(UmsProtocol(UmsProtocolType.umsProtocolType(protocol)),
       umsSchema,
       payloadArr)
   }
 
+  /**
+    * 解析ums中的payload部分
+    * "payload":[
+	                {"tuple":["","",""]},
+	                {"tuple":["","",""]},
+	                {"tuple":["","",""]},
+	                {"tuple":["","",""]},
+	                {"tuple":["","",""]},
+      ]
+    * payload的value是UmsTuple的数组Some(Seq[UmsTuple])
+    *   其中UmsTuple是key是"tuple"的字符串，value是String数组Seq[String]
+    * @param jsonObj
+    * @return
+    */
   def parsePayload(jsonObj:JSONObject): Option[Seq[UmsTuple]] ={
     if (jsonObj.containsKey("payload") && jsonObj.getJSONArray("payload").size() > 0) {
       val payloadJsonArr = jsonObj.getJSONArray("payload")

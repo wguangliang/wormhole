@@ -32,6 +32,9 @@ import org.apache.spark.streaming.kafka010._
 
 import scala.collection.mutable
 
+/**
+  * SparkContextUtils
+  */
 object SparkContextUtils extends EdpLogging{
 
   def checkSparkRestart(zookeeperPath:String,streamId:Long,appId:String): Unit = {
