@@ -28,10 +28,21 @@ import edp.wormhole.util.config.ConnectionConfig
 
 import scala.collection.mutable
 
-
+/**
+  * 使用HikariCP 高性能数据库连接池对Connection进行管理
+  */
 object DbConnection extends Serializable {
+  /**
+    * 主要维护dataSourceMap
+    * 根据jdbc url和username找到对应的HikariDataSource
+    */
+  //                                      (jdbc_url, username) => HikariDataSource
   lazy val datasourceMap: mutable.HashMap[(String,String), HikariDataSource] = new mutable.HashMap[(String,String), HikariDataSource]
-
+  /**
+    * 根据ConnectionConfig获得Connection，并在dataSourceMap中维护(jdbc_url, username) => HikariDataSource对应关系
+    * @param jdbcConfig
+    * @return
+    */
   def getConnection(jdbcConfig: ConnectionConfig): Connection = {
     val tmpJdbcUrl = jdbcConfig.connectionUrl.toLowerCase
     val tmpUsername = jdbcConfig.username.getOrElse("").toLowerCase
@@ -42,17 +53,27 @@ object DbConnection extends Serializable {
         }
       }
     }
+    // 取得一个Connection
     datasourceMap((tmpJdbcUrl,tmpUsername)).getConnection
   }
-
+  /**
+    * 私有的，在getConnection中得到调用
+    * 初始化连接池，并在dataSourceMap中维护(jdbc_url, username) => HikariDataSource对应关系
+    * @param jdbcConfig
+    */
   private def initJdbc(jdbcConfig: ConnectionConfig): Unit = {
     val jdbcUrl = jdbcConfig.connectionUrl
     val username = jdbcConfig.username
     val password = jdbcConfig.password
     val kvConfig = jdbcConfig.parameters
     println(jdbcUrl)
+    /**
+      * 1)创建HikariConfig
+      */
     val config = new HikariConfig()
     val tmpJdbcUrl = jdbcUrl.toLowerCase
+    // 根据不同的jdbc url，判断不同的driver class name
+    // mysql、oracle、postgresql、sqlserver、h2、hbase phoenix、cassandra、mongodb、elasticSearch、vertical
     if (tmpJdbcUrl.indexOf("mysql") > -1) {
       println("mysql")
       config.setConnectionTestQuery("SELECT 1")
@@ -93,28 +114,38 @@ object DbConnection extends Serializable {
     config.setJdbcUrl(jdbcUrl)
     //    config.setMaximumPoolSize(maxPoolSize)
     config.setMinimumIdle(1)
-
+    // 如果jdbc url不是sql4es
     if(tmpJdbcUrl.indexOf("sql4es") < 0){
+      // 设置kv属性
       config.addDataSourceProperty("cachePrepStmts", "true")
       config.addDataSourceProperty("maximumPoolSize", "1")
       config.addDataSourceProperty("prepStmtCacheSize", "250")
       config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
     }
 
-
+    // 根据ConnectionConfig设置额外的kv属性
     if(kvConfig.nonEmpty)  kvConfig.get.foreach(kv => config.addDataSourceProperty(kv.key, kv.value))
 
     val ds: HikariDataSource = new HikariDataSource(config)
     println(tmpJdbcUrl + "$$$$$$$$$$$$$$$$$" + ds.getUsername + " " + ds.getPassword)
+    // 加入 (url, username) => HikariDataSource
     datasourceMap((tmpJdbcUrl,username.getOrElse("").toLowerCase)) = ds
   }
 
+  /**
+    * 关闭重新获取HikariDataSource，维护在dataSourceMap中
+    * @param jdbcConfig
+    */
   def resetConnection(jdbcConfig: ConnectionConfig):Unit = {
     shutdownConnection(jdbcConfig.connectionUrl.toLowerCase,jdbcConfig.username.orNull)
     //    datasourceMap -= jdbcUrl
     getConnection(jdbcConfig).close()
   }
-
+  /**
+    * 根据jdbcurl和username找到对应的dataSource，关闭，并在datasourceMap减去
+    * @param jdbcUrl
+    * @param username
+    */
   def shutdownConnection(jdbcUrl: String,username:String):Unit = {
     val tmpJdbcUrl = jdbcUrl.toLowerCase
     val tmpUsername = if(username==null) "" else username.toLowerCase
