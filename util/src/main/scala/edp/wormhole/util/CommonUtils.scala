@@ -27,7 +27,7 @@ import edp.wormhole.util.config.WormholeDefault._
 object CommonUtils extends CommonUtils
 
 trait CommonUtils {
-
+  // 判断该block是否存在，存在即返回Right，报错即返回Left
   def tryCatch[T](block: => T): Either[java.lang.Throwable, T] = {
     try {
       Right(block)
@@ -35,7 +35,7 @@ trait CommonUtils {
       case ex: Throwable => Left(ex)
     }
   }
-
+  // 判断该block是否存在，存在即返回该值，报错即返回default
   def tryCatchDefault[T](block: => T, default: T): T = {
     tryCatch(block) match {
       case Right(t) => t

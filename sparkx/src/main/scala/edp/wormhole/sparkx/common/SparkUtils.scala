@@ -35,6 +35,9 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
 
+/**
+  * SparkUtils
+  */
 object SparkUtils extends EdpLogging {
 
   def getAppId: String = {

@@ -91,6 +91,12 @@ object UmsFieldType extends Enumeration {
 
   def umsFieldType(s: String) = UmsFieldType.withName(s.toLowerCase)
 
+  /**
+    * 根据umsFieldType值，即该field类型，对应该值v进行类型转换
+    * @param v
+    * @param umsFieldType
+    * @return
+    */
   def umsFieldValue(v: String, umsFieldType: UmsFieldType): Any = umsFieldType match {
     case STRING => CommonUtils.any2string(nullify(v))
     case INT => CommonUtils.s2int(nullify(v))
@@ -105,7 +111,17 @@ object UmsFieldType extends Enumeration {
     case _ => throw new UnsupportedOperationException(s"Unknown Type: $umsFieldType")
   }
 
+  /**
+    * 先根据fieldName从fields中找到该fieldName对应的index
+    * 根据这个index从tuple中找到对应的值，从fields中找到对应的类型
+    * 再根据类型对该值进行类型转换
+    * @param tuple
+    * @param fields
+    * @param fieldName
+    * @return
+    */
   def umsFieldValue(tuple: Seq[String], fields: Seq[UmsField], fieldName: String): Any = {
+    //              Seq[String]    indexOf(fieldName)
     val index = fields.map(_.name).indexOf(fieldName)
     if (index >= 0) umsFieldValue(tuple(index), fields(index).`type`) else null
   }

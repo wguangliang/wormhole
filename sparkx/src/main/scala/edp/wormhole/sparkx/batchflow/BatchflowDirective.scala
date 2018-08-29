@@ -172,11 +172,14 @@ object BatchflowDirective extends Directive {
   }
 
   override def flowStartProcess(ums: Ums, feedbackTopicName: String, brokers: String): Unit = {
-    val payloads = ums.payload_get
-    val schemas = ums.schema.fields_get
-    val sourceNamespace = ums.schema.namespace.toLowerCase
-    payloads.foreach(tuple => {
+    val payloads = ums.payload_get                              // payload
+    val schemas = ums.schema.fields_get                         // schema
+    val sourceNamespace = ums.schema.namespace.toLowerCase      // namespace
+    // 遍历payload
+    payloads.foreach(tuple => {  // UmsTuple
+      // 从payload中找到stream_id,并根据schema进行格式转换
       val streamId = UmsFieldType.umsFieldValue(tuple.tuple, schemas, "stream_id").toString.toLong
+      // 从payload中找到directive_id，并根据schema进行格式转换
       val directiveId = UmsFieldType.umsFieldValue(tuple.tuple, schemas, "directive_id").toString.toLong
       try {
         val swiftsEncoded = UmsFieldType.umsFieldValue(tuple.tuple, schemas, "swifts")
