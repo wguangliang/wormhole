@@ -1,8 +1,10 @@
 package edp.wormhole.dbdriver.dbpool
 
+import edp.wormhole.util.config.{ConnectionConfig, KVConfig}
+
 object DbConnectionTest {
   def main(args:Array[String]) = {
-    val url = "jdbc:mysql://10.234.129.144:3306/wormhole?useUnicode=true&characterEncoding=UTF-8&useSSL=false"
+    val url = "jdbc:mysql://sparkmaster:3306/wormhole?useUnicode=true&characterEncoding=UTF-8&useSSL=false"
     val username = "wormhole"
     val password = "wormhole"
     val parameters = Seq[KVConfig]()
