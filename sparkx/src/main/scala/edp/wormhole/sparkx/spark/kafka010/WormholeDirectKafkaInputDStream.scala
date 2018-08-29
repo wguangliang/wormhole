@@ -145,7 +145,7 @@ class WormholeDirectKafkaInputDStream[K, V](
       // curTpOffsetEnd即partition最大offset的下一个位点
       val curTpOffsetEnd: Map[TopicPartition, Long] = curTpOffset.keySet.map(tp => new TopicPartition(tp.topic(), tp.partition()) -> rkc.position(tp)).toMap
       val invalidAddTpOffset = curTpOffset.filter(elem => {
-        if (curTpOffsetEnd.contains(elem._1)) curTpOffsetEnd(elem._1) < elem._2._1 //如果curTpOffsetEnd的 想要实现的curTpOffset还要小，返回true，计入invalidAddTpOffset。理论上是curTpOffsetEnd(elem._1) > elem._2._1
+        if (curTpOffsetEnd.contains(elem._1)) curTpOffsetEnd(elem._1) < elem._2._1 //如果curTpOffsetEnd的比 想要消费的curTpOffset还要小，返回true，计入invalidAddTpOffset。理论上是 最大能消费到的offset：curTpOffsetEnd(elem._1) > elem._2._1
         else true
       })
       if (0 != invalidAddTpOffset.size) { // 如果有不合理的想要达到的offset
