@@ -34,9 +34,12 @@ object ParseSwiftsSql extends EdpLogging {
             validity: Boolean,
             dataType: String): Option[Array[SwiftsSql]] = {
     if (sqlStr.trim.nonEmpty) {
+      // 将换行、制表符去除。根据分号拆开多个sql
       val sqlStrArray = sqlStr.trim.replaceAll("\r", " ").replaceAll("\n", " ").replaceAll("\t", " ").split(";").map(str => {
         val trimStr = str.trim
+        //  去除开头 pushdown_sql
         if (trimStr.startsWith(SqlOptType.PUSHDOWN_SQL.toString)) trimStr.substring(12).trim
+          // 去除开头 parquet_sql
         else if (trimStr.startsWith(SqlOptType.PARQUET_SQL.toString)) trimStr.substring(11).trim
         else trimStr
       })
@@ -65,7 +68,7 @@ object ParseSwiftsSql extends EdpLogging {
         ParseSwiftsSqlInternal.getUnion(sqlStrEleTrim, sourceNamespace, sinkNamespace, validity, dataType)
       } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.SPARK_SQL.toString)) {
         ParseSwiftsSqlInternal.getSparkSql(sqlStrEleTrim, sourceNamespace, validity, dataType)
-      } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.CUSTOM_CLASS.toString)) {
+      } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.CUSTOM_CLASS.toString)) {  //
         getCustomClass(sqlStrEleTrim)
       } else {
         logError("optType:" + sqlStrEleTrim + " is not supported")
@@ -79,6 +82,7 @@ object ParseSwiftsSql extends EdpLogging {
 
   private def getCustomClass(sqlStrEle: String): SwiftsSql = {
     val classFullName = sqlStrEle.substring(sqlStrEle.indexOf("=") + 1).trim
+    // className -> (reflectObject, transformMethod) 注册到 swiftsTransformReflectMap
     ConfMemoryStorage.registerSwiftsTransformReflectMap(classFullName)
     SwiftsSql(SqlOptType.CUSTOM_CLASS.toString, None, classFullName, None, None, None, None, None)
   }

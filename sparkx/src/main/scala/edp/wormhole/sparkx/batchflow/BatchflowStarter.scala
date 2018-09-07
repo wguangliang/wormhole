@@ -41,7 +41,8 @@ object BatchflowStarter extends App with EdpLogging {
   // 传入的参数为能转换为WormholeConfig类型的字符串
   logInfo("swiftsConfig:" + args(0))
   val config: WormholeConfig = JsonUtils.json2caseClass[WormholeConfig](args(0))
-  val appId = SparkUtils.getAppId
+  val appId = SparkUtils.getAppId  // spark.yarn.app.id 或者 工程名
+  // 创建 feedback kafka
   WormholeKafkaProducer.init(config.kafka_output.brokers, config.kafka_output.config)
 
   val sparkConf = new SparkConf()
@@ -58,6 +59,7 @@ object BatchflowStarter extends App with EdpLogging {
 
   /**
     * 初始化udf，并zk监控
+    * 创建zk目录：/wormhole/${stream_id}/udf，并监听该目录下的子节点
     */
   UdfWatch.initUdf(config, appId,session)
 
@@ -65,7 +67,9 @@ object BatchflowStarter extends App with EdpLogging {
 //    import collection.JavaConversions._
 //    new UdfRegister().udfRegister(config.udf.get, session.sqlContext)
 //  }
-
+  /**
+    * 初始化flow
+    */
   DirectiveFlowWatch.initFlow(config, appId)
 
   val kafkaInput: KafkaInputConfig = OffsetPersistenceManager.initOffset(config, appId)

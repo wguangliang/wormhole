@@ -40,6 +40,9 @@ import scala.collection.mutable
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
+/**
+  * 内置内存管理
+  */
 object ConfMemoryStorage extends Serializable with EdpLogging {
 
   //[sourceNs,([sinkNs,(brokers,topic)],ums/json)]
@@ -48,7 +51,7 @@ object ConfMemoryStorage extends Serializable with EdpLogging {
   //[connectionNamespace(Namespace 3 fields),(connectionUrl,username,password,kvconfig)]
   val dataStoreConnectionsMap = mutable.HashMap.empty[String, ConnectionConfig]
 
-  //[lookupNamespace,Seq[sourceNamespace,sinkNamespace]
+  //[lookupNamespace,HashSet[sourceNamespace,sinkNamespace]
   val lookup2SourceSinkNamespaceMap = mutable.HashMap.empty[String, mutable.HashSet[(String, String)]]
 
   //[sourceNamespace, [sinkNamespace, (SwiftsProcessConfig, SinkProcessConfig, directiveId, swiftsConfigStr,sinkConfigStr,consumption_data_type,ums/json)]]
@@ -56,7 +59,7 @@ object ConfMemoryStorage extends Serializable with EdpLogging {
 
   //sourceNamespace,sinkNamespace,minTs
   val eventTsMap = mutable.HashMap.empty[(String, String), String]
-
+  // (protocolType, namespace)->(umsField, fieldsInfo, twoFieldsArr)
   val JsonSourceParseMap = mutable.HashMap.empty[(UmsProtocolType, String), (Seq[UmsField], Seq[FieldInfo], ArrayBuffer[(String, String)])]
   //val JsonSourceSinkSchema = mutable.HashMap.empty[(String, String), String]//[(source, sink), schema]
   //[className, (object, method)]
@@ -85,6 +88,14 @@ object ConfMemoryStorage extends Serializable with EdpLogging {
     namespaceArray1(0) == namespaceArray2(0) && namespaceArray1(1) == namespaceArray2(1) && namespaceArray1(2) == namespaceArray2(2) && namespaceArray1(3) == namespaceArray2(3)
   }
 
+  /**
+    * 添加(protocolType, namespace)->(umsField, fieldsInfo, twoFieldsArr) 到 JsonSourceParseMap
+    * @param protocolType
+    * @param namespace
+    * @param umsField
+    * @param fieldsInfo
+    * @param twoFieldsArr
+    */
   def registerJsonSourceParseMap(protocolType: UmsProtocolType, namespace: String, umsField: Seq[UmsField], fieldsInfo: Seq[FieldInfo], twoFieldsArr: ArrayBuffer[(String, String)]) = {
     JsonSourceParseMap((protocolType, namespace)) = (umsField, fieldsInfo, twoFieldsArr)
   }
@@ -206,6 +217,7 @@ object ConfMemoryStorage extends Serializable with EdpLogging {
   }
 
   def registerSwiftsTransformReflectMap(className: String): Any = {
+    // className -> (reflectObject, transformMethod)
     if (!swiftsTransformReflectMap.contains(className)) {
       val clazz = Class.forName(className)
       val reflectObject: Any = clazz.newInstance()

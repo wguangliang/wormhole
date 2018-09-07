@@ -31,7 +31,7 @@ import scala.collection.mutable
 object WormholeKafkaProducer extends Serializable {
 
   @volatile private var producerMap: mutable.HashMap[String, KafkaProducer[String, String]] = new mutable.HashMap[String, KafkaProducer[String, String]]
-
+  // kafka默认配置
   private def getProducerProps: Properties = {
     val props = new Properties()
     props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
@@ -41,6 +41,11 @@ object WormholeKafkaProducer extends Serializable {
     props
   }
 
+  /**
+    * 根据配置，创建KafkaProducer，并增加到producerMap  brokers -> KafkaProducer
+    * @param brokers
+    * @param kvConfig
+    */
   def init(brokers: String, kvConfig: Option[Seq[KVConfig]]): Unit = {
 
     if (!producerMap.contains(brokers) || producerMap(brokers) == null) {
@@ -104,10 +109,22 @@ object WormholeKafkaProducer extends Serializable {
     producerMap(brokers)
   }
 
+  /**
+    * 真正发送信息的地方（无须指定partition）
+    * <1> 若指定Partition ID,则PR被发送至指定Partition
+      <2> 若未指定Partition ID,但指定了Key, PR会按照hasy(key)发送至对应Partition
+      <3> 若既未指定Partition ID也没指定Key，PR会按照round-robin模式发送到每个Partition
+      <4> 若同时指定了Partition ID和Key, PR只会发送到指定的Partition (Key不起作用，代码逻辑决定)
+    * @param topic
+    * @param message
+    * @param key
+    * @param brokers
+    * @return
+    */
   private def sendInternal(topic: String, message: String, key: Option[String], brokers: String) =
     if (message != null) {
       try {
-        if (key.isDefined) {
+        if (key.isDefined) { // key如果不为空
           getProducer(brokers).send(new ProducerRecord[String, String](topic, key.get, message))
         } else {
           getProducer(brokers).send(new ProducerRecord[String, String](topic, message))
@@ -125,6 +142,19 @@ object WormholeKafkaProducer extends Serializable {
       }
     }
 
+  /**
+    * 真正发送信息的地方（指定partition）
+    * <1> 若指定Partition ID,则PR被发送至指定Partition
+      <2> 若未指定Partition ID,但指定了Key, PR会按照hasy(key)发送至对应Partition
+      <3> 若既未指定Partition ID也没指定Key，PR会按照round-robin模式发送到每个Partition
+      <4> 若同时指定了Partition ID和Key, PR只会发送到指定的Partition (Key不起作用，代码逻辑决定)
+    * @param topic
+    * @param partition
+    * @param message
+    * @param key
+    * @param brokers
+    * @return
+    */
   private def sendInternal(topic: String, partition: Int, message: String, key: Option[String], brokers: String) =
     if (message != null) {
       try {

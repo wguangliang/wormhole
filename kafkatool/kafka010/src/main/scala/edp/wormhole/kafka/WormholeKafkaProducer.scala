@@ -41,12 +41,19 @@ object WormholeKafkaProducer extends Serializable {
     props
   }
 
+  /**
+    * 根据配置生成KafkaProducer，维护 brokers与KafkaProducer的对应关系
+    * @param brokers
+    * @param kvConfig
+    */
   def init(brokers: String, kvConfig: Option[Seq[KVConfig]]): Unit = {
 
     if (!producerMap.contains(brokers) || producerMap(brokers) == null) {
       synchronized {
+        // 如果没有该broker
         if (!producerMap.contains(brokers) || producerMap(brokers) == null) {
           val props = getProducerProps
+          // 如果配置信息非空
           if (kvConfig.nonEmpty) {
             kvConfig.get.foreach(kv => {
               props.put(kv.key, kv.value)
@@ -54,8 +61,9 @@ object WormholeKafkaProducer extends Serializable {
           }
 
           props.put("bootstrap.servers", brokers)
+          // 维护 brokers => KafkaProducer 之间的对应关系
           producerMap(brokers) = new KafkaProducer[String, String](props)
-        }
+        } // if
       }
     }
   }

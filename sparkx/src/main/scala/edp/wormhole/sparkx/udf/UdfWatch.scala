@@ -34,15 +34,16 @@ object UdfWatch extends EdpLogging {
 
   def initUdf(config: WormholeConfig, appId: String,session:SparkSession): Unit = {
     logInfo("init udf,appId=" + appId)
-
+    //                 udfPath    =      /wormhole/${stream_id}/udf
     val udfPath = WormholeConstants.CheckpointRootPath + config.spark_config.stream_id + udfRelativePath
+    // 该路径不存则创建
     if(!WormholeZkClient.checkExist(config.zookeeper_path, udfPath)) WormholeZkClient.createPath(config.zookeeper_path, udfPath)
 //    val udfList = WormholeZkClient.getChildren(config.zookeeper_path, udfPath)
 //    udfList.toArray.foreach(udf => {
 //      val udfContent = WormholeZkClient.getData(config.zookeeper_path, udfPath + "/" + udf)
 //      add(config.kafka_output.feedback_topic_name,config.kafka_output.brokers,session)(udfPath + "/" + udf, new String(udfContent))
 //    })
-
+    // 监听该路径下的子节点
     WormholeZkClient.setPathChildrenCacheListener(config.zookeeper_path, udfPath, add, remove, update)
   }
 

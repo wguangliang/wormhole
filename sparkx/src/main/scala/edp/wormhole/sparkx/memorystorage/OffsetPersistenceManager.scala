@@ -52,12 +52,14 @@ object OffsetPersistenceManager extends EdpLogging {
 
   def initOffset(config: WormholeConfig, appId: String): KafkaInputConfig = {
     val kafkaBaseConfig: KafkaInputBaseConfig = config.kafka_input
-    val topicConfigMap = mutable.HashMap.empty[String, KafkaTopicConfig]
+    val topicConfigMap = mutable.HashMap.empty[String, KafkaTopicConfig]  // topic->topic配置信息
     logInfo("appId=" + appId)
     val zookeeperAddress = config.zookeeper_path
-
+    //               /wormhole/${stream_id}/offset
     val offsetPath = rootPath + config.spark_config.stream_id + OffsetPersistenceManager.offsetRelativePath
+    //               /wormhole/${stream_id}/${appId}
     val appIdPath = rootPath + config.spark_config.stream_id + "/" + appId
+    // 得到offset路径下的所有topic配置信息
     val persistenceTopicConfig = readFromPersistence(zookeeperAddress, offsetPath)
     var inWatch = true
     //appid exists means spark restart,user config is valid, both use persistence config
@@ -71,6 +73,7 @@ object OffsetPersistenceManager extends EdpLogging {
       }
     } else {
       //take directive config from watch
+      //                                                             /wormhole/${stream_id}/offset /  watch
       val (subscribeTopicUms, unsubscribeTopicUms) = readFromWatch(zookeeperAddress, offsetPath + "/" + DirectiveOffsetWatch.watchRelativePath)
       if (subscribeTopicUms != null) { //add topic of watch
         if (subscribeTopicUms.payload.nonEmpty)
@@ -137,15 +140,24 @@ object OffsetPersistenceManager extends EdpLogging {
     getSubAndUnsubUms(topicStr)
   }
 
+  /**
+    * 从zk zookeeperAddress中得到offsetPath路径下的topic的配置信息  (topicname, rate, Seq(partition,offset))
+    * @param zookeeperAddress
+    * @param offsetPath
+    * @return
+    */
   def readFromPersistence(zookeeperAddress: String, offsetPath: String): Seq[KafkaTopicConfig] = {
     val topicConfigList = ListBuffer.empty[KafkaTopicConfig]
     WormholeZkClient.getChildren(zookeeperAddress, offsetPath).toArray.foreach(topicNameRef => {
       val topicName = topicNameRef
+      // 排除节点                                     kafkaconfig                                             watch
       if (topicName != OffsetPersistenceManager.kafkaBaseConfigRelativePath && topicName != DirectiveOffsetWatch.watchRelativePath) {
         try {
+          // topic rate zk路径                                          /wormhole/${stream_id}/offset /  ${topicname} /   rate
           val rateStr = new String(WormholeZkClient.getData(zookeeperAddress, offsetPath + "/" + topicName + "/" + rateRelativePath))
+          // 得到partition                                          /wormhole/${stream_id}/offset /  ${topicname} /   partition
           val partitionNum = new String(WormholeZkClient.getData(zookeeperAddress, offsetPath + "/" + topicName + "/" + partitionRelativePath)).toInt
-          val pocSeq: Seq[PartitionOffsetConfig] = for(i<- 0 until partitionNum)yield PartitionOffsetConfig(i,0)
+          val pocSeq: Seq[PartitionOffsetConfig] = for(i<- 0 until partitionNum)yield PartitionOffsetConfig(i,0) // (partition, offset)
 
           topicConfigList += sparkx.common.KafkaTopicConfig(topicName, rateStr.toInt, pocSeq)
         } catch {

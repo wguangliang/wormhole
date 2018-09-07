@@ -43,10 +43,13 @@ object SparkUtils extends EdpLogging {
   def getAppId: String = {
     var appId = System.getProperty("spark.yarn.app.id")
     if (appId == null) {
+      // 取得项目目录
       val tmpPath = System.getProperty("user.dir")
       if (tmpPath.indexOf("/") > -1)
+        // linux 取得项目名称
         appId = if (tmpPath == null) "appId" else tmpPath.substring(tmpPath.lastIndexOf("/") + 1)
       else
+        // windows 取得项目名称
         appId = if (tmpPath == null) "appId" else tmpPath.substring(tmpPath.lastIndexOf("\\") + 1)
     }
     appId

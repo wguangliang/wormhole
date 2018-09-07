@@ -19,7 +19,7 @@ object JsonSourceConf {
       //      val subFieldsInfo = ArrayBuffer[FieldInfo]()
       def convert(jsonStr: String): FieldInfo = {
         val jsonObj = JSON.parseObject(jsonStr)
-        val name = jsonObj.getString("name")
+        val name = jsonObj.getString("name") // name
         val `type` = if (jsonObj.containsKey("ums_sys_field") && jsonObj.getString("ums_sys_field").nonEmpty&&jsonObj.getString("ums_sys_field")=="ums_ts_") "datetime" else jsonObj.getString("type")
         val rename = if (jsonObj.containsKey("rename") && jsonObj.getString("rename").nonEmpty) Some(jsonObj.getString("rename")) else None
         val umsOpMapping = if (jsonObj.containsKey("ums_sys_mapping") && jsonObj.getString("ums_sys_mapping").nonEmpty) Some(jsonObj.getString("ums_sys_mapping")) else None
@@ -46,11 +46,11 @@ object JsonSourceConf {
         } else {
           twoFieldArr.append(actualName)
           val realType=`type`.split("array")(0)
-          seqField.append(UmsField(actualName._2, UmsFieldType.withName(realType.toLowerCase),nullable))
+          seqField.append(UmsField(actualName._2, UmsFieldType.withName(realType.toLowerCase),nullable)) // name、type、nullable
           FieldInfo(name, `type`, umsOpMapping, nullable, None, rename, None)
         }
       }
-      val fieldInfo = convert(fieldsJsonArray.getString(i))
+      val fieldInfo = convert(fieldsJsonArray.getString(i)) // 解析fields中的每个field
 
       schemaArr.append(fieldInfo)
     }

@@ -190,7 +190,7 @@ trait UmsProtocolUtils {
                         status: UmsFeedbackStatus,
                         streamId:Long,
                         resultDesc:String): String = toJsonCompact(Ums(
-    protocol = UmsProtocol(UmsProtocolType.FEEDBACK_DIRECTIVE),
+    protocol = UmsProtocol(UmsProtocolType.FEEDBACK_DIRECTIVE), // feedback_directive
     schema = UmsSchema("", Some(Seq(
       UmsField(UmsSysField.TS.toString, UmsFieldType.STRING),
       UmsField("directive_id", UmsFieldType.LONG),

@@ -39,7 +39,7 @@ object DirectiveFlowWatch extends EdpLogging {
     * 初始化 flow
     * 1)创建zk目录 /wormhole/${stream_id}/flow
     * 2)监控该目录的子节点
-    * 3)
+    * 3)配置信息注册
     *
     * @param config
     * @param appId
@@ -76,14 +76,15 @@ object DirectiveFlowWatch extends EdpLogging {
         logWarning("data is " + data + ", not in ums")
       } else {
         // data是ums结构的字符串,返回ums结构体对象
-        val ums = UmsSchemaUtils.toUms(data) //ums结构对象
+        val ums = UmsSchemaUtils.toUms(data) //flow ums结构对象
         // 根据ums protocol的type不同，启动不同的处理方式
         ums.protocol.`type` match {
-          case UmsProtocolType.DIRECTIVE_FLOW_START | UmsProtocolType.DIRECTIVE_FLOW_STOP =>
+          case UmsProtocolType.DIRECTIVE_FLOW_START | UmsProtocolType.DIRECTIVE_FLOW_STOP => // directive_flow_start  directive_flow_stop
+            //
             BatchflowDirective.flowStartProcess(ums, feedbackTopicName, brokers)
-          case UmsProtocolType.DIRECTIVE_ROUTER_FLOW_START | UmsProtocolType.DIRECTIVE_ROUTER_FLOW_STOP =>
+          case UmsProtocolType.DIRECTIVE_ROUTER_FLOW_START | UmsProtocolType.DIRECTIVE_ROUTER_FLOW_STOP => // directive_router_flow_start  directive_router_flow_stop
             RouterDirective.flowStartProcess(ums, feedbackTopicName, brokers)
-          case UmsProtocolType.DIRECTIVE_HDFSLOG_FLOW_START | UmsProtocolType.DIRECTIVE_HDFSLOG_FLOW_STOP =>
+          case UmsProtocolType.DIRECTIVE_HDFSLOG_FLOW_START | UmsProtocolType.DIRECTIVE_HDFSLOG_FLOW_STOP => // directive_hdfslog_flow_start directive_hdfslog_flow_stop
             HdfsDirective.flowStartProcess(ums, feedbackTopicName, brokers) //TOdo change name uniform, take directiveflowwatch and directiveoffsetwatch out of core, because hdfs also use them
           case _ => logWarning("ums type: " + ums.protocol.`type` + " is not supported")
         }
