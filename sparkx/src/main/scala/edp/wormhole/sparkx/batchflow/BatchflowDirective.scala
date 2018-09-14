@@ -65,7 +65,7 @@ object BatchflowDirective extends Directive {
     consumptionDataMap(InputDataProtocolBaseType.INITIAL.toString) = initial
     consumptionDataMap(InputDataProtocolBaseType.INCREMENT.toString) = increment
     consumptionDataMap(InputDataProtocolBaseType.BATCH.toString) = batch
-    // 解析swifts
+    // 一）解析swifts
     val swiftsProcessConfig: Option[SwiftsProcessConfig] = if (swiftsStr != null) {
       // 解析swifts
       val swifts = JSON.parseObject(swiftsStr)
@@ -132,7 +132,23 @@ object BatchflowDirective extends Directive {
       } else {
         None
       }
-    } else None
+    } else None // swiftsProcessConfig: Option[SwiftsProcessConfig]
+
+    // 2）解析sink
+    /*{
+      "sink_connection_url":"jdbc:mysql://localhost:3306/mysql-sink",
+      "sink_connection_username":"wormhole",
+      "sink_connection_password":"wormhole",
+      "sink_table_keys":"count",
+      "sink_output":"",
+      "sink_connection_config":"",
+      "sink_process_class_fullname":"edp.wormhole.sinks.dbsink.Data2DbSink",
+      "sink_specific_config":{
+        "mutation_type":"i"
+      },
+      "sink_retry_times":"3",
+      "sink_retry_seconds":"300"
+    }*/
 
     val sinks = JSON.parseObject(sinksStr)
     val sink_connection_url = sinks.getString("sink_connection_url").trim.toLowerCase
