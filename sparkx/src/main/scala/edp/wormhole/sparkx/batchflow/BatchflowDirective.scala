@@ -59,9 +59,9 @@ object BatchflowDirective extends Directive {
                                          consumptionDataStr: String, dataType: String, dataParseStr: String): Unit = {
     val consumptionDataMap = mutable.HashMap.empty[String, Boolean]
     val consumption = JSON.parseObject(consumptionDataStr)
-    val initial = consumption.getString(InputDataProtocolBaseType.INITIAL.toString).trim.toLowerCase.toBoolean      // initial
-    val increment = consumption.getString(InputDataProtocolBaseType.INCREMENT.toString).trim.toLowerCase.toBoolean  // increment
-    val batch = consumption.getString(InputDataProtocolBaseType.BATCH.toString).trim.toLowerCase.toBoolean          // batch
+    val initial = consumption.getString(InputDataProtocolBaseType.INITIAL.toString).trim.toLowerCase.toBoolean      // initial的值true或者false
+    val increment = consumption.getString(InputDataProtocolBaseType.INCREMENT.toString).trim.toLowerCase.toBoolean  // increment的值true或者false
+    val batch = consumption.getString(InputDataProtocolBaseType.BATCH.toString).trim.toLowerCase.toBoolean          // batch的值true或者false
     consumptionDataMap(InputDataProtocolBaseType.INITIAL.toString) = initial
     consumptionDataMap(InputDataProtocolBaseType.INCREMENT.toString) = increment
     consumptionDataMap(InputDataProtocolBaseType.BATCH.toString) = batch
@@ -70,6 +70,7 @@ object BatchflowDirective extends Directive {
       // 解析swifts
       val swifts = JSON.parseObject(swiftsStr)
       if (swifts.size() > 0) {
+        // validity字段 TODO: 含义
         val validity = if (swifts.containsKey("validity") && swifts.getString("validity").trim.nonEmpty && swifts.getJSONObject("validity").size > 0) swifts.getJSONObject("validity") else null
         var validityConfig: Option[ValidityConfig] = None
         if (validity != null) {
@@ -121,10 +122,12 @@ object BatchflowDirective extends Directive {
         }
 
         // 解析sql
-        val SwiftsSqlArr = if (action != null) {
+        val SwiftsSqlArr = if (action != null) { // 有sql 的话
           val sqlStr = new String(new sun.misc.BASE64Decoder().decodeBuffer(action))
+          // 解析sql
           ParseSwiftsSql.parse(sqlStr, sourceNamespace, fullsinkNamespace, if (validity == null) false else true, dataType)
         } else None
+        //
         Some(SwiftsProcessConfig(SwiftsSqlArr, validityConfig, dataframe_show, dataframe_show_num, Some(swiftsSpecialConfig)))
       } else {
         None

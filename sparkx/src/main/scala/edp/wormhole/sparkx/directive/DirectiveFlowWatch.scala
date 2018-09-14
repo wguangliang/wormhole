@@ -80,7 +80,7 @@ object DirectiveFlowWatch extends EdpLogging {
         // 根据ums protocol的type不同，启动不同的处理方式
         ums.protocol.`type` match {
           case UmsProtocolType.DIRECTIVE_FLOW_START | UmsProtocolType.DIRECTIVE_FLOW_STOP => // directive_flow_start  directive_flow_stop
-            //
+            // ***流式处理***
             BatchflowDirective.flowStartProcess(ums, feedbackTopicName, brokers)
           case UmsProtocolType.DIRECTIVE_ROUTER_FLOW_START | UmsProtocolType.DIRECTIVE_ROUTER_FLOW_STOP => // directive_router_flow_start  directive_router_flow_stop
             RouterDirective.flowStartProcess(ums, feedbackTopicName, brokers)
