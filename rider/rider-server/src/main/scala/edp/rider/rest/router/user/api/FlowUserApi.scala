@@ -133,6 +133,11 @@ class FlowUserApi(flowDal: FlowDal, streamDal: StreamDal, flowUdfDal: FlowUdfDal
 
   }
 
+  /**
+    * 前端url传来SimpleFlow结构，保存 flow 信息
+    * @param route
+    * @return
+    */
   def postRoute(route: String): Route = path(route / LongNumber / "streams" / LongNumber / "flows") {
     (projectId, streamId) =>
       post {
@@ -206,7 +211,11 @@ class FlowUserApi(flowDal: FlowDal, streamDal: StreamDal, flowUdfDal: FlowUdfDal
 
   }
 
-
+  /**
+    * 对flow的操作
+    * @param route
+    * @return
+    */
   def putRoute(route: String): Route = path(route / LongNumber / "streams" / LongNumber / "flows") {
     (projectId, streamId) =>
       put {

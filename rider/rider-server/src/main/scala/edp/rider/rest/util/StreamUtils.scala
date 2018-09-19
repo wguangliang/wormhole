@@ -294,6 +294,13 @@ object StreamUtils extends RiderLogger {
     }
   }
 
+  /**
+    * 发送 订阅 ums，保存到zk目录：/wormhole/${stream_id}/offset/watch
+    * @param streamId
+    * @param topicSeq
+    * @param userId
+    * @param addDefaultTopic
+    */
   def sendTopicDirective(streamId: Long, topicSeq: Seq[PutTopicDirective], userId: Long, addDefaultTopic: Boolean = true) = {
     try {
       val directiveSeq = new ArrayBuffer[Directive]
@@ -377,10 +384,22 @@ object StreamUtils extends RiderLogger {
     }
   }
 
+  /**
+    * 发送 解除订阅 的ums，保存到zk目录：/wormhole/${stream_id}/offset/watch
+    * @param streamId
+    * @param topicsName
+    * @param userId
+    */
   def sendUnsubscribeTopicDirective(streamId: Long, topicsName: Seq[String], userId: Long): Unit = {
     topicsName.foreach(topic => sendUnsubscribeTopicDirective(streamId, topic, userId))
   }
 
+  /**
+    * 拼凑 解除订阅 的ums
+    * @param streamId
+    * @param topicName
+    * @param userId
+    */
   def sendUnsubscribeTopicDirective(streamId: Long, topicName: String, userId: Long): Unit = {
     try {
       val zkConURL: String = RiderConfig.zk

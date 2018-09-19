@@ -42,7 +42,15 @@ import scala.concurrent.{Await, Future}
 class FlowDal(flowTable: TableQuery[FlowTable], streamTable: TableQuery[StreamTable], projectTable: TableQuery[ProjectTable], streamDal: StreamDal, inTopicDal: StreamInTopicDal, flowInTopicDal: FlowInTopicDal, flowUdfTopicDal: FlowUserDefinedTopicDal)
   extends BaseDalImpl[FlowTable, Flow](flowTable) with RiderLogger {
 
+  /**
+    * 从数据库中获取Flow信息
+    * @param f
+    * @param action
+    * @tparam C
+    * @return
+    */
   def defaultGetAll[C: CanBeQueryCondition](f: (FlowTable) => C, action: String = "refresh"): Future[Seq[FlowStream]] = {
+    // 从数据库中获取flow信息
     val flows = Await.result(super.findByFilter(f), minTimeOut)
 
     val streamIds = flows.map(_.streamId).distinct

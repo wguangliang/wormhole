@@ -69,6 +69,7 @@ object PushDirective extends RiderLogger {
     deleteData(zkUrl, path)
   }
 
+  // /offset/watch
   def sendTopicDirective(streamId: Long, directiveList: String, zkUrl: String = RiderConfig.zk): Boolean = {
     val path = s"$rootPath$streamId$topicDir"
     //    riderLogger.info(s"topic zk path: $path")

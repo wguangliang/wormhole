@@ -33,6 +33,11 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.util.{Failure, Success}
 
+/**
+  * Controller Admin对Flow的管理
+  * @param flowDal
+  * @param streamDal
+  */
 class FlowAdminApi(flowDal: FlowDal, streamDal: StreamDal) extends BaseAdminApiImpl(flowDal) with RiderLogger with JsonSerializer {
 
   override def getByAllRoute(route: String): Route = path(route) {

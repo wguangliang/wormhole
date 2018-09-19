@@ -390,6 +390,10 @@ object FlowUtils extends RiderLogger {
           base64byte2s(sinkConfigSet.trim.getBytes), base64byte2s(tranConfigFinal.trim.getBytes))
         val directive = Await.result(directiveDal.insert(Directive(0, DIRECTIVE_FLOW_START.toString, streamId, flowId, "", RiderConfig.zk, currentSec, userId)), minTimeOut)
         //        riderLogger.info(s"user ${directive.createBy} insert ${DIRECTIVE_FLOW_START.toString} success.")
+        /**
+          * 拼凑flow
+          * /wormhole/${stream_id}/flow/
+          */
         val flow_start_ums =
           s"""
              |{
