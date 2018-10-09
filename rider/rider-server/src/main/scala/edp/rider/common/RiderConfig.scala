@@ -150,7 +150,9 @@ case class DBusConfig(loginUrl: String,
                       password: String,
                       namespaceUrl: String)
 
-
+/**
+  * 存储一些参数
+  */
 object RiderConfig {
 
   lazy val riderRootPath = s"${System.getenv("WORMHOLE_HOME")}"

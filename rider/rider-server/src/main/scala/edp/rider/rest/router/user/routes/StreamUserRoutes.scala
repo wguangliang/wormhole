@@ -58,6 +58,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   def getStreamByAllRoute: Route = modules.streamUserService.getByFilterRoute(basePath)
 
 
+  /**
+    * 查看某个stream信息
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/")
   @ApiOperation(value = "get stream from system by stream id", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -73,7 +77,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def getStreamById: Route = modules.streamUserService.getByIdRoute(basePath)
 
-
+  /**
+    * 更新stream的内容
+    * @return
+    */
   @Path("/projects/{id}/streams")
   @ApiOperation(value = "update stream of the system", notes = "", nickname = "", httpMethod = "PUT")
   @ApiImplicitParams(Array(
@@ -90,6 +97,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def putStreamRoute: Route = modules.streamUserService.putRoute(basePath)
 
+  /**
+    * 增加保存stream
+    * @return
+    */
   @Path("/projects/{id}/streams")
   @ApiOperation(value = "post streams to the system", notes = "", nickname = "", httpMethod = "POST")
   @ApiImplicitParams(Array(
@@ -297,6 +308,11 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   def getUdfs: Route = modules.streamUserService.getUdfsRoute(basePath)
 
 
+  /**
+    * create
+    * 获取stream的默认配置
+    * @return
+    */
   //  /streams/defaultconfigs?streamtype=spark
   @Path("/streams/defaultconfigs")
   @ApiOperation(value = "get stream default config", notes = "", nickname = "", httpMethod = "GET")

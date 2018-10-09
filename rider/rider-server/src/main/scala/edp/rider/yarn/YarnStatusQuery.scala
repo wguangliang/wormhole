@@ -147,11 +147,15 @@ object YarnStatusQuery extends RiderLogger {
   //    }
   //    resultList
   //  }
-
+  /**
+    * 获取startedTimeBegin=fromTime的在yarn上app的状态
+    * @param fromTime
+    * @return
+    */
   def getAllYarnAppStatus(fromTime: String): List[AppResult] = {
     val fromTimeLong =
       if (fromTime == "") 0
-      else if (fromTime.length > 19) dt2long(fromTime) / 1000
+      else if (fromTime.length > 19) dt2long(fromTime) / 1000     // 没有毫秒
       else if (fromTime.length < 19) dt2long(fromTime)
     val rmUrl = getActiveResourceManager(RiderConfig.spark.rm1Url, RiderConfig.spark.rm2Url)
     //    riderLogger.info(s"active resourceManager: $rmUrl")
@@ -159,6 +163,7 @@ object YarnStatusQuery extends RiderLogger {
       //      val url = s"http://${rmUrl.stripPrefix("http://").stripSuffix("/")}/ws/v1/cluster/apps?states=accepted,running,killed,failed,finished&&startedTimeBegin=$fromTimeLong&&applicationTags=${RiderConfig.spark.app_tags}&&applicationTypes=spark"
       val url = s"http://${rmUrl.stripPrefix("http://").stripSuffix("/")}/ws/v1/cluster/apps?states=accepted,running,killed,failed,finished&&startedTimeBegin=$fromTimeLong"
       riderLogger.info(s"Spark Application refresh yarn rest url: $url")
+      // http 请求
       queryAppListOnYarn(url)
     } else List()
   }

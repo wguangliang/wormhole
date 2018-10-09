@@ -590,11 +590,13 @@ object StreamUtils extends RiderLogger {
   }
 
   def checkYarnAppNameUnique(userDefinedName: String, projectId: Long): Boolean = {
+    // 根据project id 查询 project name
     val projectName = Await.result(projectDal.getById(projectId), minTimeOut).get.name
+    // 组装stream的realName = s"wormhole_${projectName}_$name"
     val realName = genStreamNameByProjectName(projectName, userDefinedName)
     if (Await.result(streamDal.findByFilter(_.name === realName), minTimeOut).nonEmpty) {
-      false
-    } else {
+      false  // 该stream name存在，则不唯一
+    } else { // 如果 该stream name不存在，则进行查询job name
       if (Await.result(jobDal.findByFilter(_.name === realName), minTimeOut).nonEmpty) false
       else true
     }

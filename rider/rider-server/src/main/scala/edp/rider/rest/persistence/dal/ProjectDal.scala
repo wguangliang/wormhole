@@ -34,7 +34,7 @@ import slick.jdbc.MySQLProfile.api._
 
 class ProjectDal(projectTable: TableQuery[ProjectTable], relProjectNsDal: RelProjectNsDal, relProjectUserDal: RelProjectUserDal, relProjectUdfDal: RelProjectUdfDal, streamDal: StreamDal) extends BaseDalImpl[ProjectTable, Project](projectTable) with RiderLogger {
   def getById(id: Long): Future[Option[ProjectUserNsUdf]] = {
-    val projectOpt = super.findById(id)
+    val projectOpt = super.findById(id)  // search project table
     projectOpt.map[Option[ProjectUserNsUdf]] {
       projectOpt => {
         projectOpt match {

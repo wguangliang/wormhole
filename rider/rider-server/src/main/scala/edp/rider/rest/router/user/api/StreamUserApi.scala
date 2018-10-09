@@ -83,6 +83,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
           if (StreamUtils.checkYarnAppNameUnique(simpleStream.name, projectId)) {
             onComplete(streamDal.insert(insertStream).mapTo[Stream]) {
               case Success(stream) =>
+                // 将所有active的steam信息维护到edp.rider.service.util.CacheMap的streamCacheMap中
                 CacheMap.streamCacheMapRefresh
                 val streamDetail = streamDal.getBriefDetail(Some(projectId), Some(Seq(stream.id)))
                 complete(OK, ResponseJson[StreamDetail](getHeader(200, session), streamDetail.head))
@@ -142,6 +143,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
   }
 
   private def getByFilterResponse(projectId: Long, streamNameOpt: Option[String], streamTypeOpt: Option[String], functionTypeOpt: Option[String], session: SessionClass): Route = {
+    // 该用户的 session 里面必须保存了该projectid
     if (session.projectIdList.contains(projectId)) {
       try {
         (streamNameOpt, streamTypeOpt, functionTypeOpt) match {
@@ -807,7 +809,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
 
   def getDefaultConfig(route: String): Route = path(route / "defaultconfigs") {
     get {
-      parameter('streamType.as[String]) {
+      parameter('streamType.as[String]) { // spark
         (streamType) =>
           authenticateOAuth2Async[SessionClass]("rider", AuthorizationProvider.authorize) {
             session =>
@@ -818,13 +820,18 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
               else {
                 StreamType.withName(streamType) match {
                   case StreamType.SPARK =>
+                    // jvm配置
                     val jvm = StreamUtils.getDefaultJvmConf
+                    // spark和资源配置
                     val sparkResource = SparkResourceConfig(RiderConfig.spark.driverCores, RiderConfig.spark.driverMemory, RiderConfig.spark.executorNum,
                       RiderConfig.spark.executorCores, RiderConfig.spark.executorMemory, RiderConfig.spark.batchDurationSec, RiderConfig.spark.parallelismPartition, RiderConfig.spark.maxPartitionFetchMb)
+                    // sparkconfig
                     val others = RiderConfig.spark.sparkConfig
+                    // 返回结果(jvm配置, spakr和资源配置, sparkconfig)
                     val defaultConfig = SparkDefaultConfig(jvm, sparkResource, others)
                     complete(OK, ResponseJson[SparkDefaultConfig](getHeader(200, session), defaultConfig))
                   case StreamType.FLINK =>
+                    // flink配置
                     val defaultConfig = RiderConfig.defaultFlinkConfig
                     complete(OK, ResponseJson[FlinkDefaultConfig](getHeader(200, session), defaultConfig))
                 }

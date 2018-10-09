@@ -25,6 +25,7 @@ import edp.rider.rest.persistence.entities.User
 
 case class LoginClass(email: String, password: String)
 
+// 用于保存用户的session信息
 case class SessionClass(userId: Long, projectIdList: List[Long], roleType: String, currentTs: Long = System.currentTimeMillis())
 
 case class LoginResult(user: User, session: SessionClass)
@@ -34,7 +35,7 @@ case class ChangeUserPwdClass(id: Long, oldPass: Option[String], newPass: String
 case class ActionClass(action: String, flowIds: String)
 
 case class ResponseHeader(code: Int, msg: String, token: String = "")
-
+// 返回页面结果的封装类
 case class ResponseJson[A](header: ResponseHeader, payload: A)
 
 case class ResponseSeqJson[A](header: ResponseHeader, payload: Seq[A])

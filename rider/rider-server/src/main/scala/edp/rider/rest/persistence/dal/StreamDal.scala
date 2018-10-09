@@ -115,6 +115,7 @@ class StreamDal(streamTable: TableQuery[StreamTable],
 
   def getStreamDetail(projectIdOpt: Option[Long] = None, streamIdsOpt: Option[Seq[Long]] = None, action: String = REFRESH.toString): Seq[StreamDetail] = {
     try {
+      // 根据projectid和streamid 查询出来stream，更改保存在cacheMap中该stream的状态为refresh
       val streamSeq = refreshStreamStatus(projectIdOpt, streamIdsOpt, action)
       val streamKafkaMap = instanceDal.getStreamKafka(streamSeq.map(stream => (stream.id, stream.instanceId)).toMap[Long, Long])
       val streamIds = streamSeq.map(_.id)
@@ -197,6 +198,10 @@ class StreamDal(streamTable: TableQuery[StreamTable],
     }
   }
 
+  /**
+    * 获取stream表中所有active的stream，封装到StreamCacheMap对象中
+    * @return
+    */
   def getAllActiveStream: Future[Seq[StreamCacheMap]] = {
     db.run(streamTable.filter(_.active === true).map { case (sTable) =>
       (sTable.id, sTable.name, sTable.projectId) <> (StreamCacheMap.tupled, StreamCacheMap.unapply)
