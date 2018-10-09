@@ -27,7 +27,12 @@ import scala.language.postfixOps
 
 
 object KafkaUtils extends RiderLogger {
-
+  /**
+    * 获取topic的latest offset
+    * @param brokers
+    * @param topic
+    * @return
+    */
   def getKafkaLatestOffset(brokers: String, topic: String): String = {
     try {
       val offset = WormholeGetOffsetShell.getTopicOffsets(brokers, topic)
@@ -40,6 +45,12 @@ object KafkaUtils extends RiderLogger {
     }
   }
 
+  /**
+    * 获取topic的某个partition的latest offset
+    * @param brokers
+    * @param topic
+    * @return
+    */
   def getKafkaLatestOffset(brokers: String, topic: String, partition: Int): String = {
     try {
       val offsets = WormholeGetOffsetShell.getTopicOffsets(brokers, topic)
@@ -53,6 +64,12 @@ object KafkaUtils extends RiderLogger {
     }
   }
 
+  /**
+    * 获取topic的某个partition的earliest offset
+    * @param brokers
+    * @param topic
+    * @return
+    */
   def getKafkaEarliestOffset(brokers: String, topic: String): String = {
     try {
       val offset = WormholeGetOffsetShell.getTopicOffsets(brokers, topic, -2)

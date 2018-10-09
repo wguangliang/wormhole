@@ -35,6 +35,10 @@ class NamespaceUserRoutes(modules: ConfigurationModule with PersistenceModule wi
 
   lazy val basePath = "projects"
 
+  /**
+    * 获取这个projectId和streamId的namespace
+    * @return
+    */
   @Path("/{projectId}/streams/{streamId}/namespaces")
   @ApiOperation(value = "get namespaces of the project", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -54,7 +58,10 @@ class NamespaceUserRoutes(modules: ConfigurationModule with PersistenceModule wi
   ))
   def filterFlowNsByProjectIdRoute: Route = modules.namespaceUserService.filterFlowNsByProjectId(basePath)
 
-
+  /**
+    * 获取这个projectId下的namespace
+    * @return
+    */
   @Path("/{id}/namespaces")
   @ApiOperation(value = "get namespaces of the project", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -72,6 +79,10 @@ class NamespaceUserRoutes(modules: ConfigurationModule with PersistenceModule wi
   ))
   def getNsByProjectIdRoute: Route = modules.namespaceUserService.getNsByProjectId(basePath)
 
+  /**
+    * 获取工程projectId和namespaceId 对应的source schema
+    * @return
+    */
   @Path("/{id}/namespaces/{id}/schema/source")
   @ApiOperation(value = "get namespace config in the system", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -87,6 +98,10 @@ class NamespaceUserRoutes(modules: ConfigurationModule with PersistenceModule wi
   ))
   def getUmsInfoRoute: Route = modules.namespaceUserService.getUmsInfoByIdRoute(basePath)
 
+  /**
+    * 获取工程projectId和namespaceId 对应的sink schema
+    * @return
+    */
   @Path("/{id}/namespaces/{nsId}/schema/sink")
   @ApiOperation(value = "get namespace config in the system", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -102,6 +117,10 @@ class NamespaceUserRoutes(modules: ConfigurationModule with PersistenceModule wi
   ))
   def getSinkInfoRoute: Route = modules.namespaceUserService.getSinkInfoByIdRoute(basePath)
 
+  /**
+    * 获取工程projectId和namespaceId 对应的topic信息
+    * @return
+    */
   @Path("/{id}/namespaces/{nsId}/topic")
   @ApiOperation(value = "get namespace topic", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(

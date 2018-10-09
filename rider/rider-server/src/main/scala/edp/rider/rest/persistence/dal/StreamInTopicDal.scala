@@ -71,6 +71,12 @@ class StreamInTopicDal(streamInTopicTable: TableQuery[StreamInTopicTable],
       }.result).mapTo[Seq[StreamTopicTemp]], minTimeOut)
   }
 
+  /**
+    * check 这个topic对应的namespace与这个streamId对应的stream是否有关联
+    * @param streamId
+    * @param topic
+    * @return true/false
+    */
   def checkAutoRegisteredTopicExists(streamId: Long, topic: String): Boolean = {
     var exist = false
     val topicSearch = Await.result(db.run(

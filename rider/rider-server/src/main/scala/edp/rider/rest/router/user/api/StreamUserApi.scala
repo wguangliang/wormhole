@@ -729,11 +729,13 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
   }
 
   def postUserDefinedTopicResponse(projectId: Long, streamId: Long, postTopic: PostUserDefinedTopic, session: SessionClass): Route = {
+    // 如果这个stream与这个topic有关联，则抛出异常
     // topic duplication check
     if (streamDal.checkTopicExists(streamId, postTopic.name)) {
       throw new Exception("stream topic relation already exists.")
     }
-    val kafkaInfo = streamDal.getKafkaInfo(streamId)
+    // (instanceid, url)
+    val kafkaInfo = streamDal.getKafkaInfo(streamId)  // 根据streamId获取kafka instance信息
     // get kafka earliest/latest offset
     val latestOffset = getKafkaLatestOffset(kafkaInfo._2, postTopic.name)
     val earliestOffset = getKafkaEarliestOffset(kafkaInfo._2, postTopic.name)

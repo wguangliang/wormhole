@@ -60,6 +60,10 @@ class ProjectUserRoutes(modules: ConfigurationModule with PersistenceModule with
   ))
   def getProjectByIdRoute: Route = modules.projectUserService.getByIdRoute(basePath)
 
+  /**
+    * 根据project id获取资源信息
+    * @return
+    */
   @Path("/{id}/resources")
   @ApiOperation(value = "get one project's resource information from system by id", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -74,7 +78,10 @@ class ProjectUserRoutes(modules: ConfigurationModule with PersistenceModule with
   ))
   def getResourceByProjectIdRoute: Route = modules.streamUserService.getResourceByProjectIdRoute(basePath)
 
-
+  /**
+    * 根据project id获取用户信息
+    * @return
+    */
   @Path("/{id}/users")
   @ApiOperation(value = "get users of the project", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -89,6 +96,10 @@ class ProjectUserRoutes(modules: ConfigurationModule with PersistenceModule with
   ))
   def getUserByProjectIdRoute: Route = modules.userService.getUserByProjectId("projects")
 
+  /**
+    *
+    * @return
+    */
   @Path("/users/{id}")
   @ApiOperation(value = "get user by id", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(

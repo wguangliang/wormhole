@@ -39,6 +39,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
 
   lazy val basePath = "projects"
 
+  /**
+    * 获取该project id下的所有stream
+    * @return
+    */
   @Path("/projects/{id}/streams")
   @ApiOperation(value = "get streams from system by project id", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -59,7 +63,7 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
 
 
   /**
-    * 查看某个stream信息
+    * 根据streamId获取某个stream信息
     * @return
     */
   @Path("/projects/{id}/streams/{streamId}/")
@@ -118,6 +122,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def postStreamRoute: Route = modules.streamUserService.postRoute(basePath)
 
+  /**
+    * 获取指定stream的日志
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/logs/")
   @ApiOperation(value = "get stream log by stream id", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -133,6 +141,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def getLogByStreamId: Route = modules.streamUserService.getLogByStreamId(basePath)
 
+  /**
+    * 启动stream
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/start")
   @ApiOperation(value = "start stream by id", notes = "", nickname = "", httpMethod = "PUT")
   @ApiImplicitParams(Array(
@@ -150,6 +162,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def startRoute: Route = modules.streamUserService.startRoute(basePath)
 
+  /**
+    * 停止stream
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/stop")
   @ApiOperation(value = "stop stream by id", notes = "", nickname = "", httpMethod = "PUT")
   @ApiImplicitParams(Array(
@@ -166,6 +182,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def stop: Route = modules.streamUserService.stopRoute(basePath)
 
+  /**
+    * 根据streamId更新stream的topic和udf
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/renew")
   @ApiOperation(value = "update topic and add udf directive to zk by stream id", notes = "", nickname = "", httpMethod = "PUT")
   @ApiImplicitParams(Array(
@@ -183,6 +203,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def renewRoute: Route = modules.streamUserService.renewRoute(basePath)
 
+  /**
+    * 根据streamId删除stream
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/delete")
   @ApiOperation(value = "delete stream by id", notes = "", nickname = "", httpMethod = "PUT")
   @ApiImplicitParams(Array(
@@ -199,7 +223,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def deleteStream: Route = modules.streamUserService.deleteStream(basePath)
 
-
+  /**
+    * 获取stream默认的jvm配置
+    * @return
+    */
   @Path("/projects/streams/default/config/jvm")
   @ApiOperation(value = "get default stream resource config", notes = "", nickname = "", httpMethod = "GET")
   @ApiResponses(Array(
@@ -211,6 +238,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def getJvmConf: Route = modules.streamUserService.getDefaultJvmConf(basePath)
 
+  /**
+    * 获取stream默认的spark配置
+    * @return
+    */
   @Path("/projects/streams/default/config/spark")
   @ApiOperation(value = "get default spark config", notes = "", nickname = "", httpMethod = "GET")
   @ApiResponses(Array(
@@ -222,6 +253,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def getSparkConf: Route = modules.streamUserService.getDefaultSparkConf(basePath)
 
+  /**
+    * 根据streamId获得某个stream消费的topic信息
+    * @return
+    */
   @Path("/projects/{id}/streams/{streamId}/topics")
   @ApiOperation(value = "get topics detail", notes = "", nickname = "", httpMethod = "GET")
   @ApiImplicitParams(Array(
@@ -237,6 +272,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def getTopics: Route = modules.streamUserService.getTopicsRoute(basePath)
 
+  /**
+    *
+    * @return
+    */
   // post /user/projects/1/streams/1/topics/userdefined
   @Path("/projects/{id}/streams/{streamId}/topics/userdefined")
   @ApiOperation(value = "get userdefined topic offsets", notes = "", nickname = "", httpMethod = "POST")
@@ -254,6 +293,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   ))
   def postUserDefinedTopic: Route = modules.streamUserService.postUserDefinedTopicRoute(basePath)
 
+  /**
+    * 得到请求topic的offset
+    * @return
+    */
   // post /user/projects/1/streams/1/topics
   @Path("/projects/{id}/streams/{streamId}/topics")
   @ApiOperation(value = "get topic offsets by request topics", notes = "", nickname = "", httpMethod = "POST")
@@ -290,6 +333,10 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   //  ))
   //  def deleteUserDefinedTopic: Route = modules.streamUserService.deleteUserDefinedTopicRoute(basePath)
 
+  /**
+    * 根据streamId获取udf
+    * @return
+    */
   // get stream udfs
   // get /user/projects/1/streams/1/udfs
   @Path("/projects/{id}/streams/{streamId}/udfs")

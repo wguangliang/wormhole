@@ -21,8 +21,12 @@ object WormholeGetOffsetShell {
     try {
       val parser = new OptionParser
       val clientId = "GetOffsetShell"
+      // 校对端口
       ToolsUtils.validatePortOrDie(parser, brokerList)
+      // 解析broker
+      //  (brokerId, address)
       val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
+      // topic meta data:Seq[TopicMetadata]
       val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
       if (topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic)) {
         throw new Exception(s"brokerList $brokerList topic $topic doesn't exist, please verify it.")
@@ -54,7 +58,7 @@ object WormholeGetOffsetShell {
               throw new Exception(s"brokerList $brokerList topic $topic partition $partitionId doesn't exist, please verify it.")
           }
         }
-        val offset = offsetSeq.sortBy(offset => offset.split(":")(0).toLong).mkString(",")
+        val offset = offsetSeq.sortBy(offset => offset.split(":")(0).toLong).mkString(",") // offsetSeq按partitionId排序，使用逗号分隔组成offset
         if (offset == "")
           throw new Exception(s"query topic $topic offset result is '', please check it.")
         offset
