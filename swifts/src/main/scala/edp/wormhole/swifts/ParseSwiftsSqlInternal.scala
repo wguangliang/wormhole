@@ -134,30 +134,39 @@ object ParseSwiftsSqlInternal {
     finalSql
   }
 
-
+  /**
+    *
+    * @param sqlStrEle        sql
+    * @param sourceNamespace  比如：kafka.kafka-test.kafka-source.ums_extension.*.*.*
+    * @param validity
+    * @param dataType         比如：ums_extension
+    * @return
+    */
   def getSparkSql(sqlStrEle: String, sourceNamespace: String, validity: Boolean, dataType: String): SwiftsSql = {
     //sourcenamespace is rule
-    val tableName = sourceNamespace.split("\\.")(3)
+    val tableName = sourceNamespace.split("\\.")(3)               // ums_extension
     val unionSqlArray = getSqlArray(sqlStrEle, " union ", 7)
-    val sqlArray = unionSqlArray.map(singleSql => {
+    val sqlArray = unionSqlArray.map(singleSql => {  // 多个sql，分开每个sql进行处理，判断是否需要增加额外的字段。
       var sql = "select "
+      // select的全部字段 (field, true) TODO select a as a', b,c from T; 得到selectFields为a',b,c
       val selectFields = singleSql
-        .substring(sqlStrEle.toLowerCase.indexOf("select ") + 7, sqlStrEle.toLowerCase.indexOf(" from "))
+        .substring(sqlStrEle.toLowerCase.indexOf("select ") + 7, sqlStrEle.toLowerCase.indexOf(" from "))  // 把select的字段全部抽离出来
         .toLowerCase.split(",")
         .map(field => {
           (field.trim.split(" ").last, true)
         }).toMap
-      if (!selectFields.contains("*")) {
-        if (dataType == "ums" && !selectFields.contains(UmsSysField.TS.toString)) {
+
+      if (!selectFields.contains("*")) { // key是否包含*
+        if (dataType == "ums" && !selectFields.contains(UmsSysField.TS.toString)) {  // ums_ts_
           sql = sql + UmsSysField.TS.toString + ", "
         }
-        if (dataType == "ums" && !selectFields.contains(UmsSysField.ID.toString)) {
+        if (dataType == "ums" && !selectFields.contains(UmsSysField.ID.toString)) { // ums_id_
           sql = sql + UmsSysField.ID.toString + ", "
         }
-        if (dataType == "ums" && !selectFields.contains(UmsSysField.OP.toString)) {
+        if (dataType == "ums" && !selectFields.contains(UmsSysField.OP.toString)) {  // ums_op_
           sql = sql + UmsSysField.OP.toString + ", "
         }
-        if (dataType == "ums" && validity && !selectFields.contains(UmsSysField.UID.toString)) {
+        if (dataType == "ums" && validity && !selectFields.contains(UmsSysField.UID.toString)) {  // ums_uid_
           sql = sql + UmsSysField.UID.toString + ", "
         }
       }
@@ -165,6 +174,7 @@ object ParseSwiftsSqlInternal {
       sql = sql.replaceAll("(?i)" + " " + tableName + " ", " " + tableName + " ")
       sql
     })
+    //                   optType           ,fields,sql =多个sql使用union合并  ,timeout,lookupNamespace,sourceTableFields,lookupTableFields,lookupTableFieldsAlias
     SwiftsSql(SqlOptType.SPARK_SQL.toString, None, sqlArray.mkString(" union "), None, None, None, None, None)
   }
 
@@ -172,7 +182,7 @@ object ParseSwiftsSqlInternal {
     val lowerSql = originalSql.toLowerCase()
     var index = 0
     val buf = new ArrayBuffer[String]()
-    while (lowerSql.indexOf(split, index) >= 0) {
+    while (lowerSql.indexOf(split, index) >= 0) { // 是否有split
       val end = lowerSql.indexOf(split, index)
       val singleSql = originalSql.substring(index, end)
       buf += singleSql

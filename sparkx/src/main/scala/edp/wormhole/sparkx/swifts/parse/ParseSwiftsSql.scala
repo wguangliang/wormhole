@@ -28,9 +28,18 @@ import edp.wormhole.util.swifts.SwiftsSql
 
 object ParseSwiftsSql extends EdpLogging {
 
-  def parse(sqlStr: String,
-            sourceNamespace: String, //sourceNamespace is rule
-            sinkNamespace: String,
+  /**
+    *
+    * @param sqlStr
+    * @param sourceNamespace
+    * @param sinkNamespace
+    * @param validity
+    * @param dataType
+    * @return
+    */
+  def parse(sqlStr: String,           // sql
+            sourceNamespace: String, //sourceNamespace is rule 比如：kafka.kafka-test.kafka-source.ums_extension.*.*.*
+            sinkNamespace: String,  // 比如：mysql.mysql-test.mysql-sink.count_num.*.*.*
             validity: Boolean,
             dataType: String): Option[Array[SwiftsSql]] = {
     if (sqlStr.trim.nonEmpty) {
@@ -50,11 +59,11 @@ object ParseSwiftsSql extends EdpLogging {
     }
   }
 
-  private def getSwiftsSql(sqlStrArray: Array[String],
-                           sourceNamespace: String, //sourcenamespace is rule
-                           sinkNamespace: String,
+  private def getSwiftsSql(sqlStrArray: Array[String],  // sql array
+                           sourceNamespace: String, //sourcenamespace is rule 比如：kafka.kafka-test.kafka-source.ums_extension.*.*.*
+                           sinkNamespace: String, // 比如：mysql.mysql-test.mysql-sink.count_num.*.*.*
                            validity: Boolean,
-                           dataType: String): Option[Array[SwiftsSql]] = {
+                           dataType: String): Option[Array[SwiftsSql]] = {  // 比如：ums_extension
     val swiftsSqlList = Some(sqlStrArray.map(sqlStrEle => {
       val sqlStrEleTrim = sqlStrEle.trim + " " //to fix no where clause bug, e.g select a, b from table;
       logInfo("sqlStrEle:::" + sqlStrEleTrim)
@@ -66,7 +75,7 @@ object ParseSwiftsSql extends EdpLogging {
         ParseSwiftsSqlInternal.getJoin(SqlOptType.RIGHT_JOIN, sqlStrEleTrim, sourceNamespace, sinkNamespace)
       } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.UNION.toString)) {
         ParseSwiftsSqlInternal.getUnion(sqlStrEleTrim, sourceNamespace, sinkNamespace, validity, dataType)
-      } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.SPARK_SQL.toString)) {
+      } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.SPARK_SQL.toString)) {   // spark_sql= 走这里
         ParseSwiftsSqlInternal.getSparkSql(sqlStrEleTrim, sourceNamespace, validity, dataType)
       } else if (sqlStrEleTrim.toLowerCase.startsWith(SqlOptType.CUSTOM_CLASS.toString)) {  //
         getCustomClass(sqlStrEleTrim)
