@@ -69,10 +69,16 @@ object WormholeGetOffsetShell {
     }
   }
 
+  /**
+    * 获得groupid的全部的offset
+    * @param broker
+    * @param groupid
+    * @return
+    */
   def getConsumerOffset(broker:String,groupid:String): Map[String, String] ={
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, broker)
-    val adminClient = AdminClient.create(props)
+    val adminClient:AdminClient = AdminClient.create(props)
 
     val offsetMap: Map[TopicPartition, Long] = adminClient.listGroupOffsets(groupid)
     val r = if(offsetMap==null||offsetMap.isEmpty) null.asInstanceOf[Map[String, String]]

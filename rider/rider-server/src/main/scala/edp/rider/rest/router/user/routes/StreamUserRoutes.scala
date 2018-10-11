@@ -143,6 +143,8 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
 
   /**
     * 启动stream
+    * 启动弹框，如果什么都不填，默认streamDirective = {"udfInfo":[]}
+    *
     * @return
     */
   @Path("/projects/{id}/streams/{streamId}/start")

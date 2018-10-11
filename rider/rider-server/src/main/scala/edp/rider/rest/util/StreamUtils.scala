@@ -86,7 +86,7 @@ object StreamUtils extends RiderLogger {
   def getStatus(action: String, streams: Seq[Stream]): Seq[Stream] = {
     val fromTime =
       if (streams.nonEmpty && streams.exists(_.startedTime.getOrElse("") != ""))
-        streams.filter(_.startedTime.getOrElse("") != "").map(_.startedTime).min.getOrElse("")
+        streams.filter(_.startedTime.getOrElse("") != "").map(_.startedTime).min.getOrElse("")  // 最小的时间戳
       else ""
     //    riderLogger.info(s"fromTime: $fromTime")
     val appInfoList: List[AppResult] =
@@ -595,6 +595,11 @@ object StreamUtils extends RiderLogger {
 
   def getLogPath(appName: String) = s"${RiderConfig.spark.clientLogRootPath}/$appName-${CommonUtils.currentNodSec}.log"
 
+  /**
+    * yyyy-mm-dd HH:MM:ss.ZZZ 去掉.ZZZ
+    * @param time
+    * @return
+    */
   def getStreamTime(time: Option[String]) =
     if (time.nonEmpty) time.get.split("\\.")(0) else null
 
