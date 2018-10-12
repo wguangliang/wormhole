@@ -207,21 +207,29 @@ object StreamUtils extends RiderLogger {
   //  }
 
   def getStreamConfig(stream: Stream) = {
-    val launchConfig = json2caseClass[LaunchConfig](stream.launchConfig)  // 该stream的启动信息：{"driverCores":1,"driverMemory":1,"executorNums":1,"perExecutorMemory":1,"perExecutorCores":1}
-    val kafkaUrl = getKafkaByStreamId(stream.id)
+    val launchConfig = json2caseClass[LaunchConfig](stream.launchConfig)  // 该stream的启动资源配置：launchConfig = {"durations":3,"partitions":1,"maxRecords":10}
+    val kafkaUrl = getKafkaByStreamId(stream.id)  // 找到instance的connUrl
     val config =
-      RiderConfig.spark.remoteHdfsRoot match {
+      RiderConfig.spark.remoteHdfsRoot match { // hdfs的根目录
+        // 如果设置hdfs的根目录
         case Some(_) =>
+          //                                     streamName      durations             kafkaConnUrl  max.partition.fetch.bytes=maxRecords*1024*1024                           kafkaSessionTimeOut                       kafkaGroupId
           BatchFlowConfig(KafkaInputBaseConfig(stream.name, launchConfig.durations.toInt, kafkaUrl, launchConfig.maxRecords.toInt * 1024 * 1024, RiderConfig.spark.kafkaSessionTimeOut, RiderConfig.spark.kafkaGroupMaxSessionTimeOut),
+            //                             配置中的feedbackTopic        配置中的feedbackBrokers
             KafkaOutputConfig(RiderConfig.consumer.feedbackTopic, RiderConfig.consumer.brokers),
+            //          stream_id  stream_name    master        `spark.sql.shuffle.partitions`
             SparkConfig(stream.id, stream.name, "yarn-cluster", launchConfig.partitions.toInt),
+            //    rdd_partition_number    zookeeper_path   kafka_persistence_config_isvalid
             launchConfig.partitions.toInt, RiderConfig.zk, false,
+            //    remoteHdfsRoot                     hdfs_namenode_hosts                    hdfs_namenode_ids
             RiderConfig.spark.remoteHdfsRoot, RiderConfig.spark.remoteHdfsNamenodeHosts, RiderConfig.spark.remoteHdfsNamenodeIds)
+
+        // 如果没有设置hdfs的根目录
         case None =>
           BatchFlowConfig(KafkaInputBaseConfig(stream.name, launchConfig.durations.toInt, kafkaUrl, launchConfig.maxRecords.toInt * 1024 * 1024, RiderConfig.spark.kafkaSessionTimeOut, RiderConfig.spark.kafkaGroupMaxSessionTimeOut),
             KafkaOutputConfig(RiderConfig.consumer.feedbackTopic, RiderConfig.consumer.brokers),
             SparkConfig(stream.id, stream.name, "yarn-cluster", launchConfig.partitions.toInt),
-            launchConfig.partitions.toInt, RiderConfig.zk, false, Some(RiderConfig.spark.hdfsRoot))
+            launchConfig.partitions.toInt, RiderConfig.zk, false, Some(RiderConfig.spark.hdfsRoot)) // hdfs_namenode_hosts和hdfs_namenode_ids设置为None
       }
     caseClass2json[BatchFlowConfig](config)
   }
@@ -230,8 +238,9 @@ object StreamUtils extends RiderLogger {
   def startStream(stream: Stream, logPath: String) = {
     StreamType.withName(stream.streamType) match {
       case StreamType.SPARK => // 如果为spark
-        val args = getStreamConfig(stream)
-        val startConfig = json2caseClass[StartConfig](stream.startConfig)
+        // 根据stream和配置文件信息封装对象 BatchFlowConfig的json形式
+        val args = getStreamConfig(stream)  // 启动参数
+        val startConfig = json2caseClass[StartConfig](stream.startConfig)  // 启动资源{"driverCores":1,"driverMemory":1,"executorNums":1,"perExecutorMemory":1,"perExecutorCores":1}
         val commandSh = generateSparkStreamStartSh(s"'''$args'''", stream.name, logPath, startConfig, stream.streamConfig.getOrElse(""), stream.functionType)
         riderLogger.info(s"start stream ${stream.id} command: $commandSh")
         runShellCommand(commandSh)
@@ -615,7 +624,9 @@ object StreamUtils extends RiderLogger {
   }
 
   def getKafkaByStreamId(id: Long): String = {
+    // 通过streamId查找stream表的id，查找instanceId
     val kakfaId = Await.result(streamDal.findById(id), minTimeOut).get.instanceId
+    // 根据instanceId查找instance表，查找connUrl
     Await.result(instanceDal.findById(kakfaId), minTimeOut).get.connUrl
   }
 

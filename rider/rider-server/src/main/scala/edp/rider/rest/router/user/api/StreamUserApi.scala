@@ -475,6 +475,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
                 if (StreamType.withName(stream.streamType) == StreamType.SPARK)  // 如果是spark
                   startStreamDirective(streamId, streamDirectiveOpt, session.userId)  // 操作及写入zk
                 val logPath = getLogPath(stream.name) // 根据streamName得到对应的log path
+
                 startStream(stream, logPath)
                 riderLogger.info(s"user ${session.userId} start stream $streamId success.")
                 onComplete(streamDal.updateByStatus(streamId, StreamStatus.STARTING.toString, session.userId, logPath).mapTo[Int]) {
