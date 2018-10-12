@@ -72,9 +72,18 @@ class JobDal(jobTable: TableQuery[JobTable], projectTable: TableQuery[ProjectTab
     Await.result(db.run(projectTable.filter(_.id inSet uniqueProjectIds).result), maxTimeOut).map(p => (p.id, p.name)).toMap
   }
 
-
+  /**
+    * 统计该project下的所有job锁占用的资源：核数和内存
+    * @param projectId
+    * @return
+    */
   def getProjectJobsUsedResource(projectId: Long) = {
+    // 查找job表
+//    select *
+//    from job
+//    where project_id = ${projectId} and job_status in ("running","waiting","starting","stopping")
     val jobSeq: Seq[Job] = Await.result(super.findByFilter(job => job.projectId === projectId && (job.status === "running" || job.status === "waiting" || job.status === "starting" || job.status === "stopping")), minTimeOut)
+    // 统计该project下的所有job锁占用的资源：核数和内存
     var usedCores = 0
     var usedMemory = 0
     val jobResources: Seq[AppResource] = jobSeq.map(

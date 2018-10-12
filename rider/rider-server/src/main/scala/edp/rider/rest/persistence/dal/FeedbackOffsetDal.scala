@@ -59,6 +59,12 @@ class FeedbackOffsetDal(feedbackOffsetTable: TableQuery[FeedbackOffsetTable]) ex
   //    else offsetSeq.head.partitionOffsets
   //  }
 
+//  select *
+//  from feedback_stream_offset
+//  where stream_id = ${streamId}
+//  order by feedback_time desc
+//  limit ${topicsNum}+1
+  // 该streamId的按feedbackTime取最大的n条数据
   def getStreamTopicsFeedbackOffset(streamId: Long, topicsNum: Long) = {
     Await.result(db.run(feedbackOffsetTable.filter(_.streamId === streamId).sortBy(_.feedbackTime.desc).take(topicsNum + 1).result).mapTo[Seq[FeedbackOffset]], minTimeOut)
   }

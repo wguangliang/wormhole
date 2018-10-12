@@ -36,10 +36,11 @@ class RelStreamUdfDal(relStreamUdfTable: TableQuery[RelStreamUdfTable], udfTable
 
   def getStreamUdf(streamIds: Seq[Long], udfIdsOpt: Option[Seq[Long]] = None): Seq[StreamUdfResponse] = {
     val udfQuery = udfIdsOpt match {
-      case Some(udfIds) => udfTable.filter(_.id inSet (udfIds))
+      case Some(udfIds) => udfTable.filter(_.id inSet (udfIds)) // 在udf表中存在的udfIds
       case None => udfTable
     }
     try {
+      // 在rel_stream_udf中stream_id 在streamsId中存在且id等于udfId
       Await.result(db.run((relStreamUdfTable.filter(_.streamId inSet streamIds) join udfQuery on (_.udfId === _.id))
         .map {
           case (relStreamUdf, udf) => (relStreamUdf.udfId, relStreamUdf.streamId, udf.functionName, udf.fullClassName, udf.jarName) <> (StreamUdfResponse.tupled, StreamUdfResponse.unapply)
@@ -55,7 +56,9 @@ class RelStreamUdfDal(relStreamUdfTable: TableQuery[RelStreamUdfTable], udfTable
   }
 
   def getDeleteUdfIds(streamId: Long, udfIds: Seq[Long]): Seq[Long] = {
+    // 从 rel_stream_udf表中查找stream_id = ${streamId}的所有udfs信息
     val udfs = Await.result(super.findByFilter(udf => udf.streamId === streamId), minTimeOut)
+    // 过滤 udfIds不包含的udf_id。即表中存在，但是udfIds里不存在
     udfs.filter(udf => !udfIds.contains(udf.udfId)).map(_.udfId)
   }
 }

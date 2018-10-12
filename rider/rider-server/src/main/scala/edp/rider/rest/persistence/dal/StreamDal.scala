@@ -227,7 +227,15 @@ class StreamDal(streamTable: TableQuery[StreamTable],
     db.run(DBIO.seq(streams.map(stream => streamTable.filter(_.id === stream.id).update(stream)): _*))
   }
 
+  /**
+    * 统计该project下的所有stream所占用的资源：核数和内存
+    * @param projectId
+    * @return
+    */
   def getProjectStreamsUsedResource(projectId: Long) = {
+//    select *
+//    from stream
+//    where project_id = ${projectId} and status in ("running","waiting","starting","stopping")
     val streamSeq: Seq[Stream] = Await.result(super.findByFilter(job => job.projectId === projectId && (job.status === "running" || job.status === "waiting" || job.status === "starting" || job.status === "stopping")), minTimeOut)
     var usedCores = 0
     var usedMemory = 0
@@ -271,6 +279,16 @@ class StreamDal(streamTable: TableQuery[StreamTable],
       }.result.head).mapTo[(Long, String)], minTimeOut)
   }
 
+  // 根据streamId查找对应的kafka instance的 连接url，组成map
+  // key：streamId, value: kafkaUrl
+//  select a.id, instance.conn_url
+//  from
+//  (
+//    select id, instance_id,
+//    from stream
+//      where id in ($streamIds)
+//  ) a, instance
+//  where a.instance_id = instance.id
   def getStreamKafkaMap(streamIds: Seq[Long]): Map[Long, String] = {
     Await.result(db.run((streamQuery.filter(_.id inSet streamIds) join instanceQuery on (_.instanceId === _.id))
       .map {
@@ -279,27 +297,44 @@ class StreamDal(streamTable: TableQuery[StreamTable],
       .map(streamKafka => (streamKafka.streamId, streamKafka.kafkaUrl)).toMap
   }
 
+  /**
+    *
+    * @param streamId
+    * @return
+    */
   def getTopicsAllOffsets(streamId: Long): GetTopicsResponse = {
     getStreamTopicsMap(Seq(streamId))(streamId)
   }
 
   def getStreamTopicsMap(streamIds: Seq[Long]): Map[Long, GetTopicsResponse] = {
+    // 查找与streamIds的stream的一些topic信息，且这些topic必须在ns_database存在
+    // Seq[StreamTopicTemp]
     val autoRegisteredTopics = streamInTopicDal.getAutoRegisteredTopics(streamIds)
+
+    // 用户自定义的topic
+    // Seq[StreamTopicTemp]
     val udfTopics = streamUdfTopicDal.getUdfTopics(streamIds)
+
+    // 根据streamId查找对应的kafka instance的 连接url，组成map
+    // key：streamId, value: kafkaUrl
     val kafkaMap = getStreamKafkaMap(streamIds)
     streamIds.map(id => {
+      // 上面两个Seq[StreamTopicTemp]合并
       val topics = autoRegisteredTopics.filter(_.streamId == id) ++: udfTopics.filter(_.streamId == id)
+      // topicName -> 最大的消费partitonOffset
       val feedbackOffsetMap = getConsumedMaxOffset(id, topics)
 
+      // 结果
+      //                                     合并topic            kakfa连接信息  topic最大消费offset
       val autoTopicsResponse = genAllOffsets(autoRegisteredTopics, kafkaMap, feedbackOffsetMap)
       val udfTopicsResponse = genAllOffsets(udfTopics, kafkaMap, feedbackOffsetMap)
 
       //update offset in table
-      val autoRegisteredUpdateTopics = autoTopicsResponse.map(topic => UpdateTopicOffset(topic.id, topic.consumedLatestOffset))
-      val udfUpdateTopics = udfTopicsResponse.map(topic => UpdateTopicOffset(topic.id, topic.consumedLatestOffset))
+      val autoRegisteredUpdateTopics = autoTopicsResponse.map(topic => UpdateTopicOffset(topic.id, topic.consumedLatestOffset)) // 封装为UpdateTopicOffset
+      val udfUpdateTopics = udfTopicsResponse.map(topic => UpdateTopicOffset(topic.id, topic.consumedLatestOffset))             // 封装为UpdateTopicOffset
 
-      streamInTopicDal.updateOffset(autoRegisteredUpdateTopics)
-      streamUdfTopicDal.updateOffset(udfUpdateTopics)
+      streamInTopicDal.updateOffset(autoRegisteredUpdateTopics)  // 更新 rel_stream_intopic表id对应的partition_offsets
+      streamUdfTopicDal.updateOffset(udfUpdateTopics)            // 更新 rel_stream_userdefined_topic表id对应的partition_offsets
       (id, GetTopicsResponse(autoTopicsResponse, udfTopicsResponse))
     }).toMap
     //    GetTopicsResponse(autoRegisteredTopicsResponse, udfTopicsResponse)
@@ -314,36 +349,44 @@ class StreamDal(streamTable: TableQuery[StreamTable],
     topicInfo
   }
 
-
+  //                               合并topic            kakfa连接信息               topic最大消费offset
   def genAllOffsets(topics: Seq[StreamTopicTemp], kafkaMap: Map[Long, String], feedbackOffsetMap: Map[String, String]): Seq[TopicAllOffsets] = {
+    // 遍历合并的topic
     topics.map(topic => {
-      val earliest = getKafkaEarliestOffset(kafkaMap(topic.streamId), topic.name)
-      val latest = getKafkaLatestOffset(kafkaMap(topic.streamId), topic.name)
-      val consumed = formatConsumedOffsetByLatestOffset(feedbackOffsetMap(topic.name), latest)
-      TopicAllOffsets(topic.id, topic.name, topic.rate, consumed, earliest, latest)
+      val earliest = getKafkaEarliestOffset(kafkaMap(topic.streamId), topic.name)   // 最小
+      val latest = getKafkaLatestOffset(kafkaMap(topic.streamId), topic.name)       // 最大
+      val consumed = formatConsumedOffsetByLatestOffset(feedbackOffsetMap(topic.name), latest) // 以feedbackOffset为主，进行截取或者扩充
+      TopicAllOffsets(topic.id, topic.name, topic.rate, consumed, earliest, latest)  // 封装为TopicAllOffsets对象进行返回
     })
   }
 
   def getConsumedMaxOffset(streamId: Long, topics: Seq[StreamTopicTemp]): Map[String, String] = {
     try {
+      // 查找streamId对应的stream信息，取第一个
       val stream = Await.result(super.findById(streamId), minTimeOut).head
 
+      // 该streamId的按feedbackTime取最大的n条数据
       val topicFeedbackSeq = feedbackOffsetDal.getStreamTopicsFeedbackOffset(streamId, topics.size)
 
+      // 初始化topicOffsetMap
       val topicOffsetMap = new mutable.HashMap[String, String]()
+      // 取feedback最大的合法数据的topic
       topicFeedbackSeq.foreach(topic => {
+        // 如果不包含topicName
         if (!topicOffsetMap.contains(topic.topicName)) {
           if (stream.startedTime.nonEmpty && stream.startedTime != null &&
-            DateUtils.yyyyMMddHHmmss(topic.umsTs) > DateUtils.yyyyMMddHHmmss(stream.startedTime.get))
+            DateUtils.yyyyMMddHHmmss(topic.umsTs) > DateUtils.yyyyMMddHHmmss(stream.startedTime.get)) // ums_ts > startTime
+            // 添加进去
             topicOffsetMap(topic.topicName) = formatOffset(topic.partitionOffsets)
         }
       })
       topics.foreach(
         topic => {
+          // 如果topicOffsetMap不包含该topicName，添加该topic:StreamTopicTemp信息添加至topicOffsetMap
           if (!topicOffsetMap.contains(topic.name)) topicOffsetMap(topic.name) = formatOffset(topic.partitionOffsets)
         }
       )
-      topicOffsetMap.toMap
+      topicOffsetMap.toMap  // 返回
     } catch {
       case ex: Exception =>
         riderLogger.error(s"get stream consumed latest offset from feedback failed", ex)

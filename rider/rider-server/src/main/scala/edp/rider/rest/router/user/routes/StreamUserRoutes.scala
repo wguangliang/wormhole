@@ -272,7 +272,7 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
     new ApiResponse(code = 451, message = "request process failed"),
     new ApiResponse(code = 500, message = "internal server error")
   ))
-  def getTopics: Route = modules.streamUserService.getTopicsRoute(basePath)
+  def getTopics: Route = modules.streamUserService.getTopicsRoute(basePath) // case class GetTopicsResponse(autoRegisteredTopics: Seq[TopicAllOffsets], userDefinedTopics: Seq[TopicAllOffsets])
 
   /**
     *

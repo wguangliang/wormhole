@@ -53,7 +53,15 @@ class StreamInTopicDal(streamInTopicTable: TableQuery[StreamInTopicTable],
   //    }
   //  }
 
+  /**
+    * 查询 rel_stream_intopic表中stream_id与关联ns_database的相关信息
+    * @param streamId
+    * @return
+    */
   def getAutoRegisteredTopics(streamId: Long): Seq[StreamTopicTemp] = {
+//    select rel_stream_intopic.id, rel_stream_intopic.stream_id, ns_database.ns_databse, rel_stream_intopic.partitionOffsets, rel_stream_intopic.rate
+//    from rel_stream_intopic, ns_database
+//    where rel_stream_intopic.stream_id = ${streamId} and rel_stream_intopic.ns_database = ns_database.id
     Await.result(db.run((streamInTopicTable.filter(_.streamId === streamId) join nsDatabaseTable on (_.nsDatabaseId === _.id))
       .map {
         case (streamInTopic, nsDatabase) => (streamInTopic.id, streamInTopic.streamId, nsDatabase.nsDatabase, streamInTopic.partitionOffsets, streamInTopic.rate) <> (StreamTopicTemp.tupled, StreamTopicTemp.unapply)
@@ -64,7 +72,20 @@ class StreamInTopicDal(streamInTopicTable: TableQuery[StreamInTopicTable],
     getAutoRegisteredTopics(streamId).map(topic => (topic.id, topic.name)).toMap
   }
 
+  /**
+    * 查找与streamIds的stream的一些topic信息，且这些topic必须在ns_database存在
+    * @param streamIds
+    * @return
+    */
   def getAutoRegisteredTopics(streamIds: Seq[Long]): Seq[StreamTopicTemp] = {
+//    select a.id, a.stream_id, ns_database.ns_database, a.partition_offsets, a.rate
+//    from
+//    (
+//        select id,stream_id,ns_database_id,partition_offsets,rate
+//        from real_stream_intopic
+//        where stream_id in ($streamIds)
+//    ) a , ns_database
+//    where a.ns_database_id = ns_database.id
     Await.result(db.run((streamInTopicTable.filter(_.streamId inSet streamIds) join nsDatabaseTable on (_.nsDatabaseId === _.id))
       .map {
         case (streamInTopic, nsDatabase) => (streamInTopic.id, streamInTopic.streamId, nsDatabase.nsDatabase, streamInTopic.partitionOffsets, streamInTopic.rate) <> (StreamTopicTemp.tupled, StreamTopicTemp.unapply)
@@ -100,7 +121,8 @@ class StreamInTopicDal(streamInTopicTable: TableQuery[StreamInTopicTable],
   }
 
   def updateByStartOrRenew(streamId: Long, topics: Seq[PutTopicDirective], userId: Long): Boolean = {
-    val topicMap = getAutoRegisteredTopics(streamId).map(topic => (topic.name, topic.id)).toMap
+    // 查询 rel_stream_intopic表中stream_id与关联ns_database的相关信息
+    val topicMap = getAutoRegisteredTopics(streamId).map(topic => (topic.name, topic.id)).toMap   // ns_databse -> streamid
     topics.filter(_.action.getOrElse(1) == 1).map(
       topic => Await.result(
         db.run(streamInTopicTable.filter(_.id === topicMap(topic.name))

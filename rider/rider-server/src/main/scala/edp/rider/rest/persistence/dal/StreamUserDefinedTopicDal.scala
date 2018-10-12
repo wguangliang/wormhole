@@ -47,6 +47,11 @@ class StreamUserDefinedTopicDal(udfTopicQuery: TableQuery[StreamUserDefinedTopic
     Await.result(super.findByFilter(_.streamId === streamId), minTimeOut).map(topic => StreamTopicTemp(topic.id, topic.streamId, topic.topic, topic.partitionOffsets, topic.rate))
   }
 
+
+// select id, stream_id, topic, partition_offsets,rate
+// from rel_stream_userdefined_topic
+// where stream_id in ($streamIds)
+  // rel_stream_userdefined_topic 此表未发现
   def getUdfTopics(streamIds: Seq[Long]): Seq[StreamTopicTemp] = {
     Await.result(super.findByFilter(_.streamId inSet streamIds), minTimeOut).map(topic => StreamTopicTemp(topic.id, topic.streamId, topic.topic, topic.partitionOffsets, topic.rate))
   }
@@ -64,6 +69,7 @@ class StreamUserDefinedTopicDal(udfTopicQuery: TableQuery[StreamUserDefinedTopic
   def deleteByStartOrRenew(streamId: Long, topics: Seq[PutTopicDirective]): Seq[String] = {
     val topicNames = topics.map(_.name)
     // find topics not in start/renew topics
+    // 删除rel_stream_userdefined_topic表中该streamId中 topic不包含在topics: Seq[PutTopicDirective]中的数据
     val deleteTopics = Await.result(super.findByFilter(topic => topic.streamId === streamId && !(topic.topic inSet topicNames)), minTimeOut)
     // delete topics
     Await.result(super.deleteById(deleteTopics.map(_.id)), minTimeOut)
@@ -76,7 +82,7 @@ class StreamUserDefinedTopicDal(udfTopicQuery: TableQuery[StreamUserDefinedTopic
     // set insert topic objects
     val insertUpdateTopics = topics.filter(_.action.getOrElse(1) == 1).map(
       topic => StreamUserDefinedTopic(0, streamId, topic.name, topic.partitionOffsets, topic.rate, currentSec, userId, currentSec, userId))
-    Await.result(super.insertOrUpdate(insertUpdateTopics), minTimeOut)
+    Await.result(super.insertOrUpdate(insertUpdateTopics), minTimeOut)  // 插入rel_stream_userdefined_topic，重复的id进行更新
     true
   }
 }

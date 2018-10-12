@@ -97,15 +97,16 @@ object KafkaUtils extends RiderLogger {
     }
   }
 
+  //                                         用户消费最大offset      kafka最大offset
   def formatConsumedOffsetByLatestOffset(consumedOffset: String, latestOffset: String): String = {
     val consumedPartition = consumedOffset.split(",").size
     val currentPartition = latestOffset.split(",").size
     if (consumedPartition == currentPartition) {
       consumedOffset
-    } else if (consumedPartition > currentPartition) {
-      consumedOffset.split(",").slice(0, currentPartition).mkString(",")
-    } else {
-      consumedOffset + "," + (consumedPartition until currentPartition).map(part => s"$part:0").mkString(",")
+    } else if (consumedPartition > currentPartition) { // 如果消费partition数 > kafka partition数
+      consumedOffset.split(",").slice(0, currentPartition).mkString(",")  // 消费partiton截取
+    } else {                                                                                                  // 如果消费partition数 > kafka partition数
+      consumedOffset + "," + (consumedPartition until currentPartition).map(part => s"$part:0").mkString(",") // 消费kafka扩充
     }
   }
 

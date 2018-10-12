@@ -50,8 +50,23 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.concurrent.Await
 
 object StreamUtils extends RiderLogger {
-
+  /**
+    * 无法执行的action
+    * @param streamType
+    * @param status
+    * @return
+    */
   def getDisableActions(streamType: String, status: String): String = {
+    // 旧版
+//    status match {
+//      case NEW => s"$STOP, $RENEW"
+//      case STARTING => s"$START, $STOP, $DELETE"
+//      case WAITING => s"$START"
+//      case RUNNING => s"$START"
+//      case STOPPING => s"$START, $RENEW"
+//      case STOPPED => s"$STOP, $RENEW"
+//      case FAILED => s"$RENEW"
+//    }
     StreamType.withName(streamType) match {
       case SPARK =>
         StreamStatus.withName(status) match {
@@ -192,7 +207,7 @@ object StreamUtils extends RiderLogger {
   //  }
 
   def getStreamConfig(stream: Stream) = {
-    val launchConfig = json2caseClass[LaunchConfig](stream.launchConfig)
+    val launchConfig = json2caseClass[LaunchConfig](stream.launchConfig)  // 该stream的启动信息：{"driverCores":1,"driverMemory":1,"executorNums":1,"perExecutorMemory":1,"perExecutorCores":1}
     val kafkaUrl = getKafkaByStreamId(stream.id)
     val config =
       RiderConfig.spark.remoteHdfsRoot match {
@@ -214,7 +229,7 @@ object StreamUtils extends RiderLogger {
 
   def startStream(stream: Stream, logPath: String) = {
     StreamType.withName(stream.streamType) match {
-      case StreamType.SPARK =>
+      case StreamType.SPARK => // 如果为spark
         val args = getStreamConfig(stream)
         val startConfig = json2caseClass[StartConfig](stream.startConfig)
         val commandSh = generateSparkStreamStartSh(s"'''$args'''", stream.name, logPath, startConfig, stream.streamConfig.getOrElse(""), stream.functionType)
@@ -228,15 +243,21 @@ object StreamUtils extends RiderLogger {
   }
 
   def genUdfsStartDirective(streamId: Long, udfIds: Seq[Long], userId: Long): Unit = {
+    // 如果udfIds非空
     if (udfIds.nonEmpty) {
+      // 获得
       val deleteUdfIds = relStreamUdfDal.getDeleteUdfIds(streamId, udfIds)
+      // 删除 表中存在，但是udfIds不存在的数据
       Await.result(relStreamUdfDal.deleteByFilter(udf => udf.streamId === streamId && udf.udfId.inSet(deleteUdfIds)), minTimeOut)
+      // udfIds 封装为 RelStreamUdf
       val insertUdfs = udfIds.map(
-        id => RelStreamUdf(0, streamId, id, currentSec, userId, currentSec, userId)
+        id => RelStreamUdf(0, streamId, id, currentSec, userId, currentSec, userId) //TODO 如果这里id都为0，多个在插入时会主键冲突
       )
-      Await.result(relStreamUdfDal.insertOrUpdate(insertUdfs).mapTo[Int], minTimeOut)
+      // 插入或更新rel_stream_udf表
+      Await.result(relStreamUdfDal.insertOrUpdate(insertUdfs).mapTo[Int], minTimeOut)  // id为主键 插入或更新。
       sendUdfDirective(streamId, relStreamUdfDal.getStreamUdf(Seq(streamId)), userId)
     } else {
+      // rel_stream_udf表删除 stream_id = ${streamId}的数据
       Await.result(relStreamUdfDal.deleteByFilter(_.streamId === streamId), minTimeOut)
     }
   }
@@ -256,18 +277,23 @@ object StreamUtils extends RiderLogger {
   def genTopicsStartDirective(streamId: Long, putTopicOpt: Option[PutStreamTopic], userId: Long): Unit = {
     putTopicOpt match {
       case Some(putTopic) =>
-        val autoRegisteredTopics = putTopic.autoRegisteredTopics
-        val userdefinedTopics = putTopic.userDefinedTopics
+        val autoRegisteredTopics = putTopic.autoRegisteredTopics  // "autoRegisteredTopics":[]
+        val userdefinedTopics = putTopic.userDefinedTopics        // "userDefinedTopics":[]
         // update auto registered topics
+        // autoRegisteredTopics信息更新至rel_stream_intopic表
         streamInTopicDal.updateByStartOrRenew(streamId, autoRegisteredTopics, userId)
         // delete user defined topics by start
+        // 删除rel_stream_userdefined_topic表中该streamId中 topic不包含在topics: Seq[PutTopicDirective]中的数据
         streamUdfTopicDal.deleteByStartOrRenew(streamId, userdefinedTopics)
         // insert or update user defined topics by start
+        // 插入 rel_stream_userdefined_topic
         streamUdfTopicDal.insertUpdateByStartOrRenew(streamId, userdefinedTopics, userId)
         // send topics start directive
+        // 将两个topic信息保存至zk
         sendTopicDirective(streamId, autoRegisteredTopics ++: userdefinedTopics, userId, true)
-      case None =>
+      case None => // 如果为none
         // delete all user defined topics by stream id
+        // rel_stream_userdefined_topic 删除该stream_id=${stream_id}的数据
         Await.result(streamUdfTopicDal.deleteByFilter(_.streamId === streamId), minTimeOut)
     }
   }
@@ -626,6 +652,7 @@ object StreamUtils extends RiderLogger {
     }
   }
 
+  // 按照partitionId排序
   def formatOffset(offset: String): String = {
     offset.split(",").sortBy(partOffset => partOffset.split(":")(0).toLong).mkString(",")
   }

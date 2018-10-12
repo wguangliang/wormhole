@@ -333,8 +333,15 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
       }
   }
 
+  /**
+    *
+    * @param streamType  default、hdfslog、routing
+    * @param action 如果是启动，这里为 start
+    * @param status  StreamStatus ：running stopped new 等
+    * @return
+    */
   private def checkAction(streamType: String, action: String, status: String): Boolean = {
-    if (getDisableActions(streamType, status).contains(action)) false
+    if (getDisableActions(streamType, status).contains(action)) false  // 如果该状态对应的无法执行的action包含这个action，则报错
     else true
   }
 
@@ -397,6 +404,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
                   complete(OK, setFailedResponse(session, "Insufficient Permission"))
                 }
                 else {
+                  // 启动
                   startResponse(id, streamId, streamDirective, session)
                 }
             }
@@ -406,14 +414,19 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
 
   private def startStreamDirective(streamId: Long, streamDirectiveOpt: Option[StreamDirective], userId: Long) = {
     // delete pre stream zk udf/topic node
+    // 删除/wormhole/${streamId}/offset/watch 节点
     PushDirective.removeTopicDirective(streamId, RiderConfig.zk)
+    // 删除/wormhole/${streamId}/udf 节点
     PushDirective.removeUdfDirective(streamId, RiderConfig.zk)
     // set new stream directive
     if (streamDirectiveOpt.nonEmpty) {
-      val streamDirective = streamDirectiveOpt.get
+      val streamDirective = streamDirectiveOpt.get   // StreamDirective(udfInfo: Seq[Long], topicInfo: Option[PutStreamTopic])
+      //                                 Seq[Long]
       genUdfsStartDirective(streamId, streamDirective.udfInfo, userId)
+      //                                 Option[PutStreamTopic]
       genTopicsStartDirective(streamId, streamDirective.topicInfo, userId)
     } else {
+      // 初始化为空
       genUdfsStartDirective(streamId, Seq(), userId)
       genTopicsStartDirective(streamId, None, userId)
     }
@@ -426,22 +439,25 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
 
   private def startResponse(projectId: Long, streamId: Long, streamDirectiveOpt: Option[StreamDirective], session: SessionClass): Route = {
     if (session.projectIdList.contains(projectId)) {
-      val streamOpt = Await.result(streamDal.findById(streamId), minTimeOut)
+      val streamOpt = Await.result(streamDal.findById(streamId), minTimeOut) // 根据sreamId在stream表中查找stream信息
       streamOpt match {
         case Some(stream) =>
-          if (checkAction(stream.streamType, START.toString, stream.status)) {
+          //                                    start
+          if (checkAction(stream.streamType, START.toString, stream.status)) { // 检测 action与status的关系
             try {
-              val project: Project = Await.result(projectDal.findById(projectId), minTimeOut).head
-              val (projectTotalCore, projectTotalMemory) = (project.resCores, project.resMemoryG)
-              val (jobUsedCore, jobUsedMemory, _) = jobDal.getProjectJobsUsedResource(projectId)
-              val (streamUsedCore, streamUsedMemory, _) = streamDal.getProjectStreamsUsedResource(projectId)
-              val (currentNeededCore, currentNeededMemory) =
+              val project: Project = Await.result(projectDal.findById(projectId), minTimeOut).head  // 根据project id查询project表的project信息
+              val (projectTotalCore, projectTotalMemory) = (project.resCores, project.resMemoryG)  // 核数和内存
+              val (jobUsedCore, jobUsedMemory, _) = jobDal.getProjectJobsUsedResource(projectId)  // 统计该project下的所有job锁占用的资源：核数和内存
+              val (streamUsedCore, streamUsedMemory, _) = streamDal.getProjectStreamsUsedResource(projectId) // 统计该project下的所有stream所占用的资源：核数和内存
+              val (currentNeededCore, currentNeededMemory) = // 统计需要的核数和内存
                 StreamType.withName(stream.streamType) match {
+                    // 如果 streamtype为spark
                   case StreamType.SPARK =>
                     val currentConfig = JsonUtils.json2caseClass[StartConfig](stream.startConfig)
                     val currentNeededCore = currentConfig.driverCores + currentConfig.executorNums * currentConfig.perExecutorCores
                     val currentNeededMemory = currentConfig.driverMemory + currentConfig.executorNums * currentConfig.perExecutorMemory
                     (currentNeededCore, currentNeededMemory)
+                  // 如果 streamtype为spark
                   case StreamType.FLINK =>
                     val currentConfig = JsonUtils.json2caseClass[FlinkResourceConfig](stream.startConfig)
                     val currentNeededCore = currentConfig.taskManagersNumber * currentConfig.perTaskManagerSlots
@@ -449,13 +465,16 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
                     (currentNeededCore, currentNeededMemory)
                 }
 
+              // 如果该project下全部的核数 < job所占核数 + stream所占核数 + 当前需求核数  或者 如果该project下全部的内存 < job所占内存 + stream所占内存 + 当前需求内存
+              // 返回 resource is not enough
               if ((projectTotalCore - jobUsedCore - streamUsedCore - currentNeededCore) < 0 || (projectTotalMemory - jobUsedMemory - streamUsedMemory - currentNeededMemory) < 0) {
                 riderLogger.warn(s"user ${session.userId} start stream ${stream.id} failed, caused by resource is not enough")
                 complete(OK, setFailedResponse(session, "resource is not enough"))
               } else {
-                if (StreamType.withName(stream.streamType) == StreamType.SPARK)
-                  startStreamDirective(streamId, streamDirectiveOpt, session.userId)
-                val logPath = getLogPath(stream.name)
+                // 如果资源充足
+                if (StreamType.withName(stream.streamType) == StreamType.SPARK)  // 如果是spark
+                  startStreamDirective(streamId, streamDirectiveOpt, session.userId)  // 操作及写入zk
+                val logPath = getLogPath(stream.name) // 根据streamName得到对应的log path
                 startStream(stream, logPath)
                 riderLogger.info(s"user ${session.userId} start stream $streamId success.")
                 onComplete(streamDal.updateByStatus(streamId, StreamStatus.STARTING.toString, session.userId, logPath).mapTo[Int]) {
@@ -596,6 +615,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
             else {
               if (session.projectIdList.contains(id)) {
                 Await.result(streamDal.findById(streamId), minTimeOut) match {
+                  //
                   case Some(_) => getTopicsResponse(id, streamId, session)
                   case None =>
                     riderLogger.info(s"user ${session.userId} get stream $streamId topics failed caused by stream not found.")
