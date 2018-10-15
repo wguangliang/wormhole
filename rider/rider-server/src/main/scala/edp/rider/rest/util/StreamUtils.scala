@@ -51,7 +51,7 @@ import scala.concurrent.Await
 
 object StreamUtils extends RiderLogger {
   /**
-    * 无法执行的action
+    * 根据status，找出对应无法执行的action
     * @param streamType
     * @param status
     * @return
@@ -67,6 +67,7 @@ object StreamUtils extends RiderLogger {
 //      case STOPPED => s"$STOP, $RENEW"
 //      case FAILED => s"$RENEW"
 //    }
+    // streamType 为spark或者flink
     StreamType.withName(streamType) match {
       case SPARK =>
         StreamStatus.withName(status) match {
@@ -213,7 +214,7 @@ object StreamUtils extends RiderLogger {
       RiderConfig.spark.remoteHdfsRoot match { // hdfs的根目录
         // 如果设置hdfs的根目录
         case Some(_) =>
-          //                                     streamName      durations             kafkaConnUrl  max.partition.fetch.bytes=maxRecords*1024*1024                           kafkaSessionTimeOut                       kafkaGroupId
+          //                                     streamName      durations             kafkaConnUrl  max.partition.fetch.bytes=maxRecords*1024*1024        kafkaSessionTimeOut                       group.max.session.timeout.ms
           BatchFlowConfig(KafkaInputBaseConfig(stream.name, launchConfig.durations.toInt, kafkaUrl, launchConfig.maxRecords.toInt * 1024 * 1024, RiderConfig.spark.kafkaSessionTimeOut, RiderConfig.spark.kafkaGroupMaxSessionTimeOut),
             //                             配置中的feedbackTopic        配置中的feedbackBrokers
             KafkaOutputConfig(RiderConfig.consumer.feedbackTopic, RiderConfig.consumer.brokers),
@@ -238,11 +239,15 @@ object StreamUtils extends RiderLogger {
   def startStream(stream: Stream, logPath: String) = {
     StreamType.withName(stream.streamType) match {
       case StreamType.SPARK => // 如果为spark
-        // 根据stream和配置文件信息封装对象 BatchFlowConfig的json形式
-        val args = getStreamConfig(stream)  // 启动参数
+        // 根据stream和配置文件信息封装对象 BatchFlowConfig的json形式（kafka，并行度的一些设置）
+        val args = getStreamConfig(stream)  // 启动参数BatchFlowConfig的字符串
         val startConfig = json2caseClass[StartConfig](stream.startConfig)  // 启动资源{"driverCores":1,"driverMemory":1,"executorNums":1,"perExecutorMemory":1,"perExecutorCores":1}
+        // 拼凑启动shell命令
+        //                                                                                           旧版这里为spark_config，新版把spark_config拆为了jvm_driver_config和jvm_executor_config和others_config
+        //                                                                                                                             对应旧版的streamType字段
         val commandSh = generateSparkStreamStartSh(s"'''$args'''", stream.name, logPath, startConfig, stream.streamConfig.getOrElse(""), stream.functionType)
         riderLogger.info(s"start stream ${stream.id} command: $commandSh")
+        // 执行命令
         runShellCommand(commandSh)
       case StreamType.FLINK =>
         val commandSh = SubmitYarnJob.generateFlinkStreamStartSh(stream)
@@ -256,7 +261,7 @@ object StreamUtils extends RiderLogger {
     if (udfIds.nonEmpty) {
       // 获得
       val deleteUdfIds = relStreamUdfDal.getDeleteUdfIds(streamId, udfIds)
-      // 删除 表中存在，但是udfIds不存在的数据
+      // 删除 rel_stream_udf表中存在，但是udfIds不存在的数据
       Await.result(relStreamUdfDal.deleteByFilter(udf => udf.streamId === streamId && udf.udfId.inSet(deleteUdfIds)), minTimeOut)
       // udfIds 封装为 RelStreamUdf
       val insertUdfs = udfIds.map(
@@ -264,6 +269,7 @@ object StreamUtils extends RiderLogger {
       )
       // 插入或更新rel_stream_udf表
       Await.result(relStreamUdfDal.insertOrUpdate(insertUdfs).mapTo[Int], minTimeOut)  // id为主键 插入或更新。
+      // 写入zk：  /wormhole/${streamId}/udf/${functionName}
       sendUdfDirective(streamId, relStreamUdfDal.getStreamUdf(Seq(streamId)), userId)
     } else {
       // rel_stream_udf表删除 stream_id = ${streamId}的数据
@@ -298,7 +304,7 @@ object StreamUtils extends RiderLogger {
         // 插入 rel_stream_userdefined_topic
         streamUdfTopicDal.insertUpdateByStartOrRenew(streamId, userdefinedTopics, userId)
         // send topics start directive
-        // 将两个topic信息保存至zk
+        // 将两个topic信息保存至zk  /wormhole/${streamId}/offset/watch
         sendTopicDirective(streamId, autoRegisteredTopics ++: userdefinedTopics, userId, true)
       case None => // 如果为none
         // delete all user defined topics by stream id
@@ -348,8 +354,10 @@ object StreamUtils extends RiderLogger {
           val tuple = Seq(streamId, currentMicroSec, topic.name, topic.rate, topic.partitionOffsets).mkString("#")
           directiveSeq += Directive(0, DIRECTIVE_TOPIC_SUBSCRIBE.toString, streamId, 0, tuple, zkConURL, currentSec, userId)
       })
-      if (addDefaultTopic) {
+      if (addDefaultTopic) { //
+        // 根据streamId找到对应instance的broker列表
         val broker = getKafkaByStreamId(streamId)
+        // 心跳topic
         val blankTopicOffset = KafkaUtils.getKafkaLatestOffset(broker, RiderConfig.spark.wormholeHeartBeatTopic)
         val blankTopic = Directive(0, DIRECTIVE_TOPIC_SUBSCRIBE.toString, streamId, 0, Seq(streamId, currentMicroSec, RiderConfig.spark.wormholeHeartBeatTopic, RiderConfig.spark.topicDefaultRate, blankTopicOffset).mkString("#"), zkConURL, currentSec, userId)
         directiveSeq += blankTopic
@@ -410,6 +418,7 @@ object StreamUtils extends RiderLogger {
           """.stripMargin.replaceAll("[\\n\\t\\r]+", "")
           jsonCompact(ums)
       }).mkString("\n")
+      // 写入zk = /wormhole/${streamId}/offset/watch
       PushDirective.sendTopicDirective(streamId, topicUms)
       riderLogger.info(s"user $userId send topic directive $topicUms success.")
     } catch {

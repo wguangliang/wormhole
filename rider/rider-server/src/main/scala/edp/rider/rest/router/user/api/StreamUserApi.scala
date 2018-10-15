@@ -426,7 +426,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
       //                                 Option[PutStreamTopic]
       genTopicsStartDirective(streamId, streamDirective.topicInfo, userId)
     } else {
-      // 初始化为空
+
       genUdfsStartDirective(streamId, Seq(), userId)
       genTopicsStartDirective(streamId, None, userId)
     }
@@ -447,7 +447,7 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
             try {
               val project: Project = Await.result(projectDal.findById(projectId), minTimeOut).head  // 根据project id查询project表的project信息
               val (projectTotalCore, projectTotalMemory) = (project.resCores, project.resMemoryG)  // 核数和内存
-              val (jobUsedCore, jobUsedMemory, _) = jobDal.getProjectJobsUsedResource(projectId)  // 统计该project下的所有job锁占用的资源：核数和内存
+              val (jobUsedCore, jobUsedMemory, _) = jobDal.getProjectJobsUsedResource(projectId)  // 统计该project下的所有job占用的资源：核数和内存
               val (streamUsedCore, streamUsedMemory, _) = streamDal.getProjectStreamsUsedResource(projectId) // 统计该project下的所有stream所占用的资源：核数和内存
               val (currentNeededCore, currentNeededMemory) = // 统计需要的核数和内存
                 StreamType.withName(stream.streamType) match {
@@ -473,17 +473,17 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
               } else {
                 // 如果资源充足
                 if (StreamType.withName(stream.streamType) == StreamType.SPARK)  // 如果是spark
-                  startStreamDirective(streamId, streamDirectiveOpt, session.userId)  // 操作及写入zk
+                  startStreamDirective(streamId, streamDirectiveOpt, session.userId)  // 操作及用户定义topic、udf及心跳topic写入zk
                 val logPath = getLogPath(stream.name) // 根据streamName得到对应的log path
-
+                // shell 提交spark任务
                 startStream(stream, logPath)
                 riderLogger.info(s"user ${session.userId} start stream $streamId success.")
                 onComplete(streamDal.updateByStatus(streamId, StreamStatus.STARTING.toString, session.userId, logPath).mapTo[Int]) {
                   case Success(_) =>
                     val stream = Await.result(streamDal.findById(streamId), minTimeOut).get
-                    val startResponse = StartResponse(streamId,
-                      StreamStatus.STARTING.toString,
-                      getDisableActions(stream.streamType, StreamStatus.STARTING.toString),
+                    val startResponse = StartResponse(streamId,  // streamId
+                      StreamStatus.STARTING.toString,             // 状态为starting
+                      getDisableActions(stream.streamType, StreamStatus.STARTING.toString), //
                       getHideActions(stream.streamType),
                       stream.sparkAppid, stream.startedTime, stream.stoppedTime
                     )
