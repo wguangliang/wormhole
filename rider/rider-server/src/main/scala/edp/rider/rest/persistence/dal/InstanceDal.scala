@@ -34,12 +34,16 @@ import scala.concurrent.duration.Duration._
 class InstanceDal(instanceTable: TableQuery[InstanceTable], databaseDal: NsDatabaseDal) extends BaseDalImpl[InstanceTable, Instance](instanceTable) with RiderLogger {
 
   def getStreamKafka(streamInstanceMap: Map[Long, Long]): Map[Long, StreamKafka] = {
+//    select *
+//    from instance wehre id in $(instanceid)
     try {
       val instanceMap = Await.result(super.findByFilter(_.id inSet streamInstanceMap.values.toList.distinct), Inf)
         .map(instance => (instance.id, StreamKafka(instance.nsInstance, instance.connUrl))).toMap[Long, StreamKafka]
       streamInstanceMap.map(
+        //(stream.id, stream.instanceId)
         map => {
-          if (instanceMap.contains(map._2)) (map._1, instanceMap(map._2))
+          //                                (stream_id, StreamKafka(instance.nsInstance, instance.connUrl))
+          if (instanceMap.contains(map._2)) (map._1, instanceMap(map._2))   // 更新的streaminstance的instanceid需要在instance表中存在
           else throw InstanceNotExistException(s"instance ${map._2} didn't exist")
         }
       )

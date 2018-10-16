@@ -1186,13 +1186,24 @@ object FlowUtils extends RiderLogger {
     }
   }
 
+  /**
+    *  stream相关的spark flow的状态该为suspending
+    * @param streamId
+    * @param streamType
+    * @param streamStatus
+    * @return
+    */
   def updateStatusByStreamStop(streamId: Long, streamType: String, streamStatus: String): Int = {
+    // 根据stream id查询flow表得到相关flow信息
     val flows = Await.result(flowDal.findByFilter(_.streamId === streamId), minTimeOut)
+
     StreamType.withName(streamType) match {
-      case StreamType.SPARK =>
+      case StreamType.SPARK => // spark
+        // 过滤出running、starting、updating的flow的id
         val flowIds = flows.filter(flow =>
           flow.status == FlowStatus.RUNNING.toString || flow.status == FlowStatus.STARTING.toString || flow.status == FlowStatus.UPDATING.toString)
           .map(_.id)
+        // 将这些flow的status改为suspending
         Await.result(flowDal.updateStatusByStreamStop(flowIds, FlowStatus.SUSPENDING.toString), minTimeOut)
       case StreamType.FLINK =>
         if (streamStatus == StreamStatus.STOPPING.toString) {

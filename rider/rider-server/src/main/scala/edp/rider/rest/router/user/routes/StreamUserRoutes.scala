@@ -40,7 +40,8 @@ class StreamUserRoutes(modules: ConfigurationModule with PersistenceModule with 
   lazy val basePath = "projects"
 
   /**
-    * 获取该project id下的所有stream
+    * 获取该project id下的所有stream的状态，instance，project相关信息
+    * 显示stream列表
     * @return
     */
   @Path("/projects/{id}/streams")

@@ -116,18 +116,33 @@ object YarnStatusQuery extends RiderLogger {
     getAllYarnAppStatus(fromTime)
   }
 
+  /**
+    * 找到yarn上的真正对应数据库stream的app
+    * @param appList
+    * @param appId
+    * @param appName
+    * @param curStatus
+    * @param startedTime
+    * @param stoppedTime
+    * @return
+    */
   def getAppStatusByRest(appList: List[AppResult], appId: String, appName: String, curStatus: String, startedTime: String, stoppedTime: String): AppInfo = {
+    // 数据库的app参数封装为AppResult
     var result = AppResult(appId, appName, curStatus, "", startedTime, stoppedTime)
+    // 找到yarn上的真正对应数据库stream的app
+    // 遍历yarn的applist
     appList.foreach {
       app =>
+        // 找同一个app name进行关联
         if (app.appName == appName) {
-          if (result.startedTime == null || yyyyMMddHHmmss(app.startedTime) >= yyyyMMddHHmmss(result.startedTime))
+          if (result.startedTime == null || yyyyMMddHHmmss(app.startedTime) >= yyyyMMddHHmmss(result.startedTime)) // 查找yarn上开始时间>插入数据库中的时间的app记为当前数据库中stream在yarn上的app
             result = app
         } else {
           riderLogger.debug("refresh spark/yarn api response is null")
         }
     }
     if (result.finalStatus != null && result.finalStatus == YarnAppStatus.SUCCEEDED.toString)
+      // 执行完成
       AppInfo(result.appId, StreamStatus.DONE.toString, result.startedTime, result.finishedTime)
     else
       AppInfo(result.appId, result.appStatus, result.startedTime, result.finishedTime)
@@ -148,9 +163,9 @@ object YarnStatusQuery extends RiderLogger {
   //    resultList
   //  }
   /**
-    * 获取startedTimeBegin=fromTime的在yarn上app的状态
+    * 获取 startedTimeBegin<fromTime 的在yarn上app的状态
     * @param fromTime
-    * @return
+    * @return AppResult(appId: String, appName: String, appStatus: String, finalStatus: String, startedTime: String, finishedTime: String)
     */
   def getAllYarnAppStatus(fromTime: String): List[AppResult] = {
     val fromTimeLong =
@@ -162,6 +177,7 @@ object YarnStatusQuery extends RiderLogger {
     if (rmUrl != "") {
       //      val url = s"http://${rmUrl.stripPrefix("http://").stripSuffix("/")}/ws/v1/cluster/apps?states=accepted,running,killed,failed,finished&&startedTimeBegin=$fromTimeLong&&applicationTags=${RiderConfig.spark.app_tags}&&applicationTypes=spark"
       val url = s"http://${rmUrl.stripPrefix("http://").stripSuffix("/")}/ws/v1/cluster/apps?states=accepted,running,killed,failed,finished&&startedTimeBegin=$fromTimeLong"
+      // 例如： http://sparkworker2:8088/ws/v1/cluster/apps?states=accepted,running,killed,failed,finished&&startedTimeBegin=1537853013
       riderLogger.info(s"Spark Application refresh yarn rest url: $url")
       // http 请求
       queryAppListOnYarn(url)

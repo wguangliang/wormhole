@@ -320,11 +320,14 @@ class FlowDal(flowTable: TableQuery[FlowTable], streamTable: TableQuery[StreamTa
   }
 
   def updateStatusByStreamStop(flowIds: Seq[Long], status: String): Future[Int] = {
+    // 如果status为stopped或者failed，更新flow的status和stoppedTime到flow表
     if (status == FlowStatus.STOPPED.toString || status == FlowStatus.FAILED.toString) {
       db.run(flowTable.filter(_.id inSet flowIds)
         .map(flow => (flow.status, flow.stoppedTime))
         .update(status, Some(currentSec))).mapTo[Int]
     } else {
+      // 停止stream的方法，status为suspending
+      // 将这些flow的status改为suspending
       db.run(flowTable.filter(_.id inSet flowIds)
         .map(flow => (flow.status))
         .update(status)).mapTo[Int]

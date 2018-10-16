@@ -166,10 +166,13 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
           case (None, Some(_), Some(_)) =>
             riderLogger.error(s"user ${session.userId} request url is not supported.")
             complete(OK, setFailedResponse(session, "Insufficient Permission"))
+          // 刷新stream list
           case (None, None, None) =>
+            // 根据project id 得到关联stream app 的状态信息、instance、project信息封装为 StreamDetail
             val streams = streamDal.getBriefDetail(Some(projectId))
             riderLogger.info(s"user ${session.userId} select streams where project id is $projectId success.")
-            complete(OK, ResponseSeqJson[StreamDetail](getHeader(200, session), streams))
+            complete(OK, ResponseSeqJson[StreamDetail](getHeader(200, session), streams)) // 返回
+          // 都有值的话报错
           case (_, _, _) =>
             riderLogger.error(s"user ${session.userId} request url is not supported.")
             complete(OK, setFailedResponse(session, "Insufficient Permission"))
@@ -301,9 +304,11 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
               complete(OK, getHeader(403, session))
             }
             else {
-              if (session.projectIdList.contains(id)) {
-                val stream = Await.result(streamDal.findById(streamId), minTimeOut).get
-                if (checkAction(stream.streamType, STOP.toString, stream.status)) {
+              if (session.projectIdList.contains(id)) { // 用户工程是否包含该project id
+                val stream = Await.result(streamDal.findById(streamId), minTimeOut).get // 根据streamId从stream表中找到steam信息
+                // 动作与状态的关系，是否是disable关系。是的话报错
+                if (checkAction(stream.streamType, STOP.toString, stream.status)) {  // 检测 action与status的关系
+                  //                                 spark,flink
                   val status = stopStream(stream.id, stream.streamType, stream.sparkAppid, stream.status)
                   riderLogger.info(s"user ${
                     session.userId
@@ -334,9 +339,9 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
   }
 
   /**
-    *
+    * 动作与状态的关系，是否是disable关系。是的话报错
     * @param streamType  default、hdfslog、routing
-    * @param action 如果是启动，这里为 start
+    * @param action 如果是启动，这里为 start， 如果停止，这里为stop
     * @param status  StreamStatus ：running stopped new 等
     * @return
     */
@@ -478,13 +483,14 @@ class StreamUserApi(jobDal: JobDal, streamDal: StreamDal, projectDal: ProjectDal
                 // shell 提交spark任务
                 startStream(stream, logPath)
                 riderLogger.info(s"user ${session.userId} start stream $streamId success.")
+                // 更新stream表的状态为starting
                 onComplete(streamDal.updateByStatus(streamId, StreamStatus.STARTING.toString, session.userId, logPath).mapTo[Int]) {
                   case Success(_) =>
                     val stream = Await.result(streamDal.findById(streamId), minTimeOut).get
                     val startResponse = StartResponse(streamId,  // streamId
                       StreamStatus.STARTING.toString,             // 状态为starting
-                      getDisableActions(stream.streamType, StreamStatus.STARTING.toString), //
-                      getHideActions(stream.streamType),
+                      getDisableActions(stream.streamType, StreamStatus.STARTING.toString), // 无法使用的按钮
+                      getHideActions(stream.streamType), // 隐藏按钮
                       stream.sparkAppid, stream.startedTime, stream.stoppedTime
                     )
                     complete(OK, ResponseJson[StartResponse](getHeader(200, session), startResponse))

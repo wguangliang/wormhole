@@ -106,29 +106,35 @@ object StreamUtils extends RiderLogger {
       else ""
     //    riderLogger.info(s"fromTime: $fromTime")
     val appInfoList: List[AppResult] =
-      if (fromTime == "") List() else getAllYarnAppStatus(fromTime).sortWith(_.appId < _.appId)
+      if (fromTime == "") List() else getAllYarnAppStatus(fromTime).sortWith(_.appId < _.appId)  // 根据该开始时间，查询出所有的yarn app状态的信息，并按appid从递增排序
     //    riderLogger.info(s"app info size: ${appInfoList.size}")
+    // 遍历 数据库中的streams，更改状态
     streams.map(
       stream => {
-        val dbStatus = stream.status
-        val dbUpdateTime = stream.updateTime
+        val dbStatus = stream.status   // stream在数据库中的状态
+        val dbUpdateTime = stream.updateTime  // stream在数据库中的更新时间
         val startedTime = if (stream.startedTime.getOrElse("") == "") null else stream.startedTime.get
         val stoppedTime = if (stream.stoppedTime.getOrElse("") == "") null else stream.stoppedTime.get
         val appInfo = {
           if (action == "start") AppInfo("", "starting", currentSec, null)
           else if (action == "stop") AppInfo("", "stopping", startedTime, stoppedTime)
+          // 如果action为refresh
           else {
             val endAction =
-              if (dbStatus == STARTING.toString) "refresh_log"
+              if (dbStatus == STARTING.toString) "refresh_log"  // 如果数据库中状态为starting
               else "refresh_spark"
 
             val sparkStatus: AppInfo = endAction match {
               case "refresh_spark" =>
                 getAppStatusByRest(appInfoList, stream.sparkAppid.getOrElse(""), stream.name, stream.status, startedTime, stoppedTime)
               case "refresh_log" =>
+                // 根据log查询app任务的状态
+                // (appId, status)
                 val logInfo = YarnClientLog.getAppStatusByLog(stream.name, dbStatus, stream.logPath.getOrElse(""))
                 logInfo._2 match {
                   case "running" =>
+                    // 找到yarn上的真正对应数据库stream的app
+                    //                yarn的applist
                     getAppStatusByRest(appInfoList, logInfo._1, stream.name, logInfo._2, startedTime, stoppedTime)
                   case "waiting" =>
                     val curInfo = getAppStatusByRest(appInfoList, logInfo._1, stream.name, logInfo._2, startedTime, stoppedTime)
@@ -137,13 +143,16 @@ object StreamUtils extends RiderLogger {
                   case "failed" => AppInfo(logInfo._1, "failed", startedTime, currentSec)
                 }
               case _ => AppInfo("", stream.status, startedTime, null)
-            }
+            } // sparkStatus
             if (sparkStatus == null) AppInfo(stream.sparkAppid.getOrElse(""), "failed", startedTime, stoppedTime)
+              // spark status不是失败
             else {
-              val resStatus = dbStatus match {
+              val resStatus = dbStatus match { // 数据库中的状态进行匹配
+                // 数据库中的状态starting
                 case "starting" =>
+                  // 对应yarn的状态
                   sparkStatus.appState.toUpperCase match {
-                    case "RUNNING" => AppInfo(sparkStatus.appId, "running", sparkStatus.startedTime, sparkStatus.finishedTime)
+                    case "RUNNING" => AppInfo(sparkStatus.appId, "running", sparkStatus.startedTime, sparkStatus.finishedTime) //
                     case "ACCEPTED" => AppInfo(sparkStatus.appId, "waiting", sparkStatus.startedTime, sparkStatus.finishedTime)
                     case "KILLED" | "FINISHED" | "FAILED" => AppInfo(sparkStatus.appId, "failed", sparkStatus.startedTime, sparkStatus.finishedTime)
                     case _ => AppInfo("", "starting", startedTime, stoppedTime)
@@ -186,12 +195,14 @@ object StreamUtils extends RiderLogger {
               resStatus
             }
           }
-        }
+        } // app info =
+
         //        val preAppInfo = AppInfo(stream.sparkAppid.getOrElse(""), dbStatus, startedTime, stoppedTime)
         //        if (!preAppInfo.equals(appInfo))
+        // 根据AppInfo 封装Stream 返回
         stream.updateFromSpark(appInfo)
         //        else stream
-      })
+      }) // streams.map
   }
 
 
@@ -591,10 +602,13 @@ object StreamUtils extends RiderLogger {
 
   def stopStream(streamId: Long, streamType: String, sparkAppid: Option[String], status: String): String = {
     if (status == RUNNING.toString || status == WAITING.toString) {
-      if (sparkAppid.getOrElse("") != "") {
+      if (sparkAppid.getOrElse("") != "") { // 如果spark appid 不为空
+        // 拼凑kill命令
         val cmdStr = "yarn application -kill " + sparkAppid.get
         riderLogger.info(s"stop stream command: $cmdStr")
+        // shell 执行
         runShellCommand(cmdStr)
+        //
         FlowUtils.updateStatusByStreamStop(streamId, streamType, STOPPING.toString)
         STOPPING.toString
       } else {

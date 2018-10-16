@@ -60,16 +60,16 @@ object YarnClientLog extends RiderLogger {
     try {
       val fileLines = getLogByAppName(appName, logPath).split("\\n")
       val appIdList = appIdPattern.findAllIn(fileLines.mkString("\\n")).toList
-      val appId = if (appIdList.nonEmpty) appIdList.last.stripPrefix("Application report for").trim else ""
-      val hasException = fileLines.count(s => s contains "Exception")
-      val isRunning = fileLines.count(s => s contains s"(state: $RUNNING)")
-      val isAccepted = fileLines.count(s => s contains s"(state: $ACCEPTED)")
-      val isFinished = fileLines.count(s => s contains s"((state: $FINISHED))")
+      val appId = if (appIdList.nonEmpty) appIdList.last.stripPrefix("Application report for").trim else ""  // 根据Application report for 找到application id
+      val hasException = fileLines.count(s => s contains "Exception")               // Exception 的数据条数
+      val isRunning = fileLines.count(s => s contains s"(state: $RUNNING)")         // RUNNING 的数据条数
+      val isAccepted = fileLines.count(s => s contains s"(state: $ACCEPTED)")       // ACCEPTED 的数据条数
+      val isFinished = fileLines.count(s => s contains s"((state: $FINISHED))")     // FINISHED 的数据条数
 
       val status =
-        if (appId == "" && hasException == 0) curStatus
-        else if (appId == "" && hasException > 0) StreamStatus.FAILED.toString
-        else if (hasException == 0 && isRunning > 0) StreamStatus.RUNNING.toString
+        if (appId == "" && hasException == 0) curStatus   // 如果application id为""，即没有Application report for
+        else if (appId == "" && hasException > 0) StreamStatus.FAILED.toString        // 如果有Exception，则status为FAILED
+        else if (hasException == 0 && isRunning > 0) StreamStatus.RUNNING.toString    // 如果出现RUNNING，则status为RUNNING
         else if (hasException > 0) StreamStatus.FAILED.toString
         else if (isAccepted > 0) StreamStatus.WAITING.toString
         else if (isFinished > 0) StreamStatus.FINISHED.toString

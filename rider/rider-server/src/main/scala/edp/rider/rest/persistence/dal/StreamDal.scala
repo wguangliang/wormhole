@@ -44,8 +44,13 @@ class StreamDal(streamTable: TableQuery[StreamTable],
                 streamInTopicDal: StreamInTopicDal,
                 streamUdfDal: RelStreamUdfDal,
                 projectTable: TableQuery[ProjectTable]) extends BaseDalImpl[StreamTable, Stream](streamTable) with RiderLogger {
-
+  /**
+    * 根据stream找到关联的project
+    * @param streamSeq
+    * @return 关联(project id, project name)
+    */
   def getStreamProjectMap(streamSeq: Seq[Stream]): Map[Long, String] = {
+    // 找到这些stream关联的project
     val projectSeq = Await.result(db.run(projectTable.filter(_.id inSet streamSeq.map(_.projectId)).result).mapTo[Seq[Project]], minTimeOut)
     projectSeq.map(project => (project.id, project.name)).toMap
   }
@@ -55,17 +60,32 @@ class StreamDal(streamTable: TableQuery[StreamTable],
   }
 
   def refreshStreamStatus(projectIdOpt: Option[Long] = None, streamIdsOpt: Option[Seq[Long]] = None, action: String = REFRESH.toString): Seq[Stream] = {
+    // 根据project id 和stream ids查询出所有的streams
     val streamSeq = getStreamSeq(projectIdOpt, streamIdsOpt)
+    // (streamId -> xxx)
     val streamMap = streamSeq.map(stream => (stream.id, (stream.sparkAppid, stream.status, getStreamTime(stream.startedTime), getStreamTime(stream.stoppedTime)))).toMap
-    val refreshStreamSeq = getStatus(action, streamSeq)
+    // 根据log与yarn得到app status状态
+    val refreshStreamSeq = getStatus(action, streamSeq) // stream app status的信息
+    // 过滤出需要更新的
     val updateStreamSeq = refreshStreamSeq.filter(stream => {
+      // 如果完全相等，返回false。即没有更新
       if (streamMap(stream.id) == (stream.sparkAppid, stream.status, getStreamTime(stream.startedTime), getStreamTime(stream.stoppedTime))) false else true
     })
+    // 更新数据库stream表
     updateByRefresh(updateStreamSeq)
-    refreshStreamSeq
+    refreshStreamSeq // stream app status的信息返回
   }
 
+  /**
+    * 根据streamIds查询Stream表得到Seq[Stream]
+    * @param projectIdOpt
+    * @param streamIdsOpt
+    * @return
+    */
   def getStreamSeq(projectIdOpt: Option[Long] = None, streamIdsOpt: Option[Seq[Long]] = None): Seq[Stream] = {
+//    select *
+//    from stream
+//    where stream_id in $(streamIds)
     (projectIdOpt, streamIdsOpt) match {
       case (_, Some(streamIds)) => Await.result(super.findByFilter(stream => stream.id inSet streamIds), minTimeOut)
       case (Some(projectId), None) => Await.result(super.findByFilter(_.projectId === projectId), minTimeOut)
@@ -73,13 +93,28 @@ class StreamDal(streamTable: TableQuery[StreamTable],
     }
   }
 
+  /**
+    * 根据project id和stream id（或许没有）确定stream
+    * 通过log和yarn 确定stream 的状态信息
+    * 通过steam关联instance 和 project
+    * 封装为StreamDetail
+    * @param projectIdOpt
+    * @param streamIdsOpt
+    * @param action
+    * @return
+    */
   def getBriefDetail(projectIdOpt: Option[Long] = None, streamIdsOpt: Option[Seq[Long]] = None, action: String = REFRESH.toString): Seq[StreamDetail] = {
     try {
-      val streamSeq = refreshStreamStatus(projectIdOpt, streamIdsOpt, action)
-      val streamKafkaMap = instanceDal.getStreamKafka(streamSeq.map(stream => (stream.id, stream.instanceId)).toMap[Long, Long])
+      // 刷新stream的状态
+      val streamSeq = refreshStreamStatus(projectIdOpt, streamIdsOpt, action) // 得到stream app status的信息
+      // 根据stream_id和instance_id与instance表关联得到(streamId, Instance信息)
+      val streamKafkaMap = instanceDal.getStreamKafka(streamSeq.map(stream => (stream.id, stream.instanceId)).toMap[Long, Long])  // (stream_id, StreamKafka(instance.nsInstance, instance.connUrl))
+      // 找到这些stream关联的project
       val projectMap = getStreamProjectMap(streamSeq)
+      // 将关联的project和instance信息封装为StreamDetail
       streamSeq.map(
         stream => {
+          //                                                                                                                不可用action                                     隐藏action
           StreamDetail(stream, projectMap(stream.projectId), streamKafkaMap(stream.id), None, Seq[StreamUdf](), getDisableActions(stream.streamType, stream.status), getHideActions(stream.streamType))
         }
       )
@@ -157,6 +192,7 @@ class StreamDal(streamTable: TableQuery[StreamTable],
     if (status == StreamStatus.STARTING.toString) {
       db.run(streamTable.filter(_.id === streamId)
         .map(stream => (stream.status, stream.sparkAppid, stream.logPath, stream.startedTime, stream.stoppedTime, stream.updateTime, stream.updateBy))
+        //            sparkAppid为null                      stoppedTime为null
         .update(status, null, Some(logPath), Some(currentSec), null, currentSec, userId)).mapTo[Int]
     } else {
       db.run(streamTable.filter(_.id === streamId)
